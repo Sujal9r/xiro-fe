@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import Modal from "../../../components/Modal";
 import apiCall from "../../../lib/api";
-import { PERMISSION_GROUPS, PERMISSION_LABELS } from "../../../lib/permissions";
+import { PERMISSION_GROUPS, PERMISSION_LABELS, PERMISSIONS, PermissionKey } from "../../../lib/permissions";
 import { useAlert } from "../../../components/AlertProvider";
 
 interface Role {
@@ -23,6 +23,8 @@ export default function RoleManagement() {
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [formData, setFormData] = useState({ name: "", permissions: [] as string[] });
   const [isCreateMode, setIsCreateMode] = useState(false);
+  const [userPermissions, setUserPermissions] = useState<PermissionKey[]>([]);
+  const [userRole, setUserRole] = useState<string>("");
   const { showAlert } = useAlert();
 
   useEffect(() => {
@@ -49,16 +51,19 @@ export default function RoleManagement() {
       permissions: group.permissions.filter((perm) => available.has(perm)),
     })).filter((group) => group.permissions.length > 0);
 
-    const groupedSet = new Set(grouped.flatMap((group) => group.permissions));
-    const leftovers = availablePermissions.filter(
-      (perm) => !groupedSet.has(perm) && !hiddenPermissions.has(perm),
-    );
+  const groupedSet = new Set<string>(
+  grouped.flatMap((group) => group.permissions as string[])
+);
+  const leftovers = availablePermissions.filter(
+  (perm) =>
+    !groupedSet.has(perm as any) && !hiddenPermissions.has(perm),
+);
 
     if (leftovers.length > 0) {
       grouped.push({
         id: "other",
         title: "Other",
-        permissions: leftovers,
+        permissions: leftovers as any,
       });
     }
 
@@ -67,6 +72,12 @@ export default function RoleManagement() {
 
   const fetchData = async () => {
     try {
+      // Fetch current user info
+      const me = await apiCall("/api/auth/me");
+      setUserRole(me.role || "");
+      setUserPermissions((me.permissions || []) as PermissionKey[]);
+
+      // Fetch roles data
       const rolesData = await apiCall("/api/admin/roles");
       setRoles(rolesData.roles || []);
       setAvailablePermissions(rolesData.availablePermissions || []);
@@ -75,6 +86,9 @@ export default function RoleManagement() {
       setLoading(false);
     }
   };
+
+  // Check if user can edit system roles (must be superadmin or have MANAGE_ROLES permission)
+  const canEditSystemRole = userRole === "superadmin" || userPermissions.includes(PERMISSIONS.MANAGE_ROLES);
 
   const customRoles = useMemo(() => roles, [roles]);
 

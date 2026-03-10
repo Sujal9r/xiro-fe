@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import DashboardLayout from "../../components/DashboardLayout";
 import apiCall from "../../lib/api";
+import { PermissionKey } from "../../lib/permissions";
 
 interface User {
   id: string;

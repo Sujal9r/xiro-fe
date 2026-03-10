@@ -32,10 +32,10 @@ const resolveShift = (user: UserShift) => ({
   endTime: user.shift?.endTime || DEFAULT_SHIFT_END,
 });
 
-const to12HourParts = (time: string) => {
-  if (!SHIFT_TIME_PATTERN.test(time)) return { clock: "12:00", period: "AM" as const };
+const to12HourParts = (time: string): { clock: string; period: "AM" | "PM" } => {
+  if (!SHIFT_TIME_PATTERN.test(time)) return { clock: "12:00", period: "AM" };
   const [hours, minutes] = time.split(":").map(Number);
-  const period = hours >= 12 ? "PM" : "AM";
+  const period = (hours >= 12 ? "PM" : "AM") as "AM" | "PM";
   const normalizedHour = hours % 12 || 12;
   return {
     clock: `${String(normalizedHour).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
