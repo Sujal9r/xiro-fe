@@ -1,4 +1,4 @@
-"use client";
+="use client";
 
 import { useState, useEffect } from "react";
 import { useFormik } from "formik";
@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { PERMISSIONS, PermissionKey } from "../../lib/permissions";
 import SettingsDrawer from "../../components/SettingsDrawer";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://xiro-be.onrender.com';
 
 export default function Login() {
   const router = useRouter();
