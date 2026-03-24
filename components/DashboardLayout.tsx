@@ -12,11 +12,11 @@ import {
   HiOutlineCog,
   HiOutlineClock,
   HiOutlineLocationMarker,
+  HiOutlineUserCircle,
 } from "react-icons/hi";
 import { useRouter, usePathname } from "next/navigation";
 import { Dialog, Transition } from "@headlessui/react";
 import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
-import ProfileDropdown from "./ProfileDropdown";
 import apiCall from "../lib/api";
 import { PERMISSIONS, PermissionKey } from "../lib/permissions";
 import ThemeToggle from "./ThemeToggle";
@@ -93,6 +93,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const canManageLocations = can(PERMISSIONS.MANAGE_USERS) || can(PERMISSIONS.EDIT_EMPLOYEE);
 
   const navItems = [
+    {
+      label: "Profile",
+      path: "/profile",
+      icon: "profile",
+    },
     can(PERMISSIONS.VIEW_DASHBOARD) && {
       label: "Dashboard",
       path: "/dashboard",
@@ -231,9 +236,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     />
                   ))}
                 </nav>
-                <div className="mt-auto px-3 pb-4">
-                  <ProfileDropdown showName fullWidth align="left" placement="top" />
-                </div>
               </Dialog.Panel>
             </Transition.Child>
           </div>
@@ -252,30 +254,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <span className="font-semibold text-gray-900">Atto App</span>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle compact={sidebarCollapsed} />
-            <button
-              onClick={() => setSidebarCollapsed((prev) => !prev)}
-              className="inline-flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-600 hover:bg-gray-100 transition"
-              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              <svg
-                className={`h-5 w-5 transition-transform duration-300 ${
-                  sidebarCollapsed ? "rotate-180" : ""
-                }`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-            </button>
-          </div>
         </div>
 
         <nav className="px-2 py-3 space-y-2">
@@ -290,19 +268,35 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           ))}
         </nav>
 
-        <div className="mt-auto px-3 pb-4">
-          <div
-            className={`flex items-center w-full ${
-              sidebarCollapsed ? "justify-center" : "justify-start"
-            }`}
+        <div
+          className={`mt-auto border-t border-gray-100 px-3 py-3 ${
+            sidebarCollapsed
+              ? "flex flex-col items-center gap-3"
+              : "flex items-center justify-between gap-2"
+          }`}
+        >
+          <ThemeToggle compact={sidebarCollapsed} />
+          <button
+            onClick={() => setSidebarCollapsed((prev) => !prev)}
+            className="inline-flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100"
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            <ProfileDropdown
-              showName={!sidebarCollapsed}
-              fullWidth={!sidebarCollapsed}
-              align={sidebarCollapsed ? "right" : "left"}
-              placement="top"
-            />
-          </div>
+            <svg
+              className={`h-5 w-5 transition-transform duration-300 ${
+                sidebarCollapsed ? "rotate-180" : ""
+              }`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+          </button>
         </div>
       </aside>
 
@@ -319,6 +313,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
 
 type IconKey =
+  | "profile"
   | "dashboard"
   | "users"
   | "tickets"
@@ -332,6 +327,7 @@ type IconKey =
   | "locations";
 
 const ICONS: Record<IconKey, React.ReactNode> = {
+  profile: <HiOutlineUserCircle className="h-5 w-5" />,
   dashboard: <HiOutlineViewGrid className="h-5 w-5" />,
   users: <HiOutlineUsers className="h-5 w-5" />,
   tickets: <HiOutlineTicket className="h-5 w-5" />,
@@ -369,13 +365,19 @@ function SidebarNavButton({
         router.push(path);
         onNavigate?.();
       }}
-      className={`w-full flex items-center gap-3 h-fit px-3 py-2 rounded-lg text-sm font-medium transition ${
-        active
-          ? "bg-blue-600 text-white shadow-sm"
-          : "text-gray-700 hover:bg-gray-100"
-      } ${collapsed ? "justify-center" : "justify-start"}`}
+      className={`flex text-sm font-medium transition ${
+        collapsed
+          ? active
+            ? "mx-auto h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm"
+            : "mx-auto h-12 w-12 items-center justify-center rounded-2xl text-gray-700 hover:bg-gray-100"
+          : active
+            ? "w-full items-center gap-3 rounded-lg px-3 py-2 text-white shadow-sm bg-blue-600"
+            : "w-full items-center gap-3 rounded-lg px-3 py-2 text-gray-700 hover:bg-gray-100"
+      }`}
+      aria-label={label}
+      title={collapsed ? label : undefined}
     >
-      <span className={`${collapsed ? "" : "text-gray-700"} ${active ? "text-white" : ""}`}>
+      <span className={active ? "text-white" : ""}>
         {ICONS[icon]}
       </span>
       <span

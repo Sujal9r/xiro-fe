@@ -116,20 +116,52 @@ export default function UserManagement() {
     if (user.leave?.halfDay) {
       return {
         label: "Half Day",
-        className: "bg-orange-100 text-orange-700",
+        style: {
+          backgroundColor: "color-mix(in srgb, #f97316 18%, var(--card))",
+          color: "#f97316",
+        },
       };
     }
     if (user.leave) {
       return {
         label: "On Leave",
-        className: "bg-blue-100 text-blue-700",
+        style: {
+          backgroundColor: "color-mix(in srgb, var(--accent-500) 18%, var(--card))",
+          color: "var(--accent-600)",
+        },
       };
     }
     if (user.isActive) {
-      return { label: "Active", className: "bg-green-100 text-green-800" };
+      return {
+        label: "Active",
+        style: {
+          backgroundColor: "color-mix(in srgb, #22c55e 18%, var(--card))",
+          color: "#16a34a",
+        },
+      };
     }
-    return { label: "Disabled", className: "bg-red-100 text-red-800" };
+    return {
+      label: "Disabled",
+      style: {
+        backgroundColor: "color-mix(in srgb, #ef4444 18%, var(--card))",
+        color: "#dc2626",
+      },
+    };
   }, []);
+
+  const getRoleBadgeStyle = useCallback(
+    (user: User) =>
+      user.role === "admin" || user.role === "superadmin"
+        ? {
+            backgroundColor: "color-mix(in srgb, #8b5cf6 18%, var(--card))",
+            color: "#7c3aed",
+          }
+        : {
+            backgroundColor: "color-mix(in srgb, var(--foreground) 12%, var(--card))",
+            color: "var(--foreground)",
+          },
+    []
+  );
 
   const roleFilterOptions = useMemo(() => {
     const uniqueRoles = Array.from(new Set(users.map((user) => getRoleLabel(user))));
@@ -371,11 +403,8 @@ export default function UserManagement() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <span
-                      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        user.role === "admin" || user.role === "superadmin"
-                          ? "bg-purple-100 text-purple-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
+                      className="inline-flex rounded-full px-2 py-1 text-xs font-semibold leading-5"
+                      style={getRoleBadgeStyle(user)}
                     >
                       {getRoleLabel(user)}
                     </span>
@@ -383,7 +412,8 @@ export default function UserManagement() {
                   {canViewStatus && (
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <span
-                        className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${status.className}`}
+                        className="inline-flex rounded-full px-2 py-1 text-xs font-semibold leading-5"
+                        style={status.style}
                       >
                         {status.label}
                       </span>

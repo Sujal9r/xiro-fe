@@ -27,7 +27,7 @@ export default function ThemeToggle({ compact = false }: { compact?: boolean }) 
     <button
       onClick={toggleTheme}
       className={`inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-100 transition ${
-        compact ? "px-2" : ""
+        compact ? "h-11 w-11 justify-center px-0" : ""
       }`}
       aria-label="Toggle theme"
       type="button"

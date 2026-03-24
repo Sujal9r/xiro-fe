@@ -6,10 +6,11 @@ import Modal from "./Modal";
 type AlertPayload = {
   title?: string;
   message: string;
+  onClose?: () => void;
 };
 
 type AlertContextValue = {
-  showAlert: (message: string, title?: string) => void;
+  showAlert: (message: string, title?: string, onClose?: () => void) => void;
 };
 
 const AlertContext = createContext<AlertContextValue | null>(null);
@@ -17,8 +18,14 @@ const AlertContext = createContext<AlertContextValue | null>(null);
 export function AlertProvider({ children }: { children: React.ReactNode }) {
   const [alert, setAlert] = useState<AlertPayload | null>(null);
 
-  const showAlert = (message: string, title?: string) => {
-    setAlert({ message, title });
+  const showAlert = (message: string, title?: string, onClose?: () => void) => {
+    setAlert({ message, title, onClose });
+  };
+
+  const handleClose = () => {
+    const onClose = alert?.onClose;
+    setAlert(null);
+    onClose?.();
   };
 
   const value = useMemo(() => ({ showAlert }), []);
@@ -29,7 +36,7 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
       <Modal
         open={!!alert}
         title={alert?.title || "Notice"}
-        onClose={() => setAlert(null)}
+        onClose={handleClose}
         size="sm"
       >
         <div className="space-y-4">
@@ -38,7 +45,7 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
           </p>
           <button
             type="button"
-            onClick={() => setAlert(null)}
+            onClick={handleClose}
             className="w-full rounded-lg py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
             style={{ backgroundColor: "var(--accent-600)" }}
           >

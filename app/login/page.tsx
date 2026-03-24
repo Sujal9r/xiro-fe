@@ -1,4 +1,4 @@
-="use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import { useFormik } from "formik";
@@ -35,6 +35,7 @@ export default function Login() {
     }),
     onSubmit: async (values) => {
       setMessage("");
+      setIsError(false);
       setLoading(true);
       try {
         const res = await fetch(`${API_URL}/api/auth/login`, {
@@ -43,7 +44,10 @@ export default function Login() {
           body: JSON.stringify(values),
         });
 
-        const data = await res.json();
+        const contentType = res.headers.get("content-type") || "";
+        const data = contentType.includes("application/json")
+          ? await res.json()
+          : { message: "Unexpected server response" };
 
         if (!res.ok) {
           setMessage(data.message || "Login failed");
@@ -51,15 +55,15 @@ export default function Login() {
           return;
         }
 
-        setMessage("Login successful");
+        setMessage("");
         setIsError(false);
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
 
         const permissions = (data.user.permissions || []) as PermissionKey[];
-        setTimeout(() => router.push(getDefaultPath(permissions)), 600);
+        router.push(getDefaultPath(permissions));
       } catch {
-        setMessage("Server error");
+        setMessage("Unable to reach the server. Check that the backend is running.");
         setIsError(true);
       } finally {
         setLoading(false);
@@ -131,10 +135,15 @@ export default function Login() {
                   <label className="text-xs font-semibold text-gray-500">Email address</label>
                   <input
                     name="email"
+                    value={formik.values.email}
                     placeholder="name@company.com"
                     onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
                     className="w-full rounded-xl border border-gray-200 px-4 py-3 text-black placeholder-gray-400 focus:ring-2 focus:ring-blue-500"
                   />
+                  {formik.touched.email && formik.errors.email ? (
+                    <p className="text-xs text-red-600">{formik.errors.email}</p>
+                  ) : null}
                 </div>
 
                 <div className="space-y-1">
@@ -143,8 +152,10 @@ export default function Login() {
                     <input
                       type={showPassword ? "text" : "password"}
                       name="password"
+                      value={formik.values.password}
                       placeholder="Enter your password"
                       onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
                       className="w-full rounded-xl border border-gray-200 px-4 py-3 text-black placeholder-gray-400 focus:ring-2 focus:ring-blue-500"
                     />
                     <button
@@ -155,6 +166,9 @@ export default function Login() {
                       {showPassword ? "Hide" : "Show"}
                     </button>
                   </div>
+                  {formik.touched.password && formik.errors.password ? (
+                    <p className="text-xs text-red-600">{formik.errors.password}</p>
+                  ) : null}
                 </div>
 
                 <button

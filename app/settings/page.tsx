@@ -1,7 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { HiOutlineLogout } from "react-icons/hi";
 import DashboardLayout from "../../components/DashboardLayout";
+import apiCall from "../../lib/api";
 import {
   FONTS,
   PALETTES,
@@ -17,6 +20,7 @@ import {
 } from "../../lib/theme";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [mode, setMode] = useState<ThemeMode>(() => getStoredTheme());
   const [palette, setPaletteState] = useState<PaletteKey>(() => getStoredPalette());
   const [font, setFontState] = useState<FontKey>(() => getStoredFont());
@@ -29,6 +33,16 @@ export default function SettingsPage() {
     () => Object.entries(PALETTES) as Array<[PaletteKey, (typeof PALETTES)[PaletteKey]]>,
     [],
   );
+
+  const handleLogout = async () => {
+    try {
+      await apiCall("/api/auth/logout", { method: "POST" });
+    } catch {
+    } finally {
+      localStorage.removeItem("token");
+      router.push("/login");
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -100,6 +114,17 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
+        </section>
+
+        <section className="bg-white rounded-xl shadow p-6">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-4 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50"
+          >
+            <HiOutlineLogout className="h-5 w-5" />
+            <span>Logout</span>
+          </button>
         </section>
       </div>
     </DashboardLayout>

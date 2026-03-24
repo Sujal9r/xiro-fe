@@ -21,12 +21,12 @@
 }
 
 .dark {
-  --background: #0b0f1a;
-  --foreground: #e5e7eb;
-  --card: #111827;
-  --card-muted: #0f172a;
-  --border: #1f2937;
-  --text-muted: #9ca3af;
+  --background: #000000;
+  --foreground: #f5f5f5;
+  --card: #050505;
+  --card-muted: #0a0a0a;
+  --border: #1a1a1a;
+  --text-muted: #a3a3a3;
 }
 
 /* Palette */
@@ -99,7 +99,11 @@ body {
 
 .dark .text-gray-700,
 .dark .text-gray-600,
-.dark .text-gray-500 {
+.dark .text-gray-500,
+.dark .text-gray-800,
+.dark .text-purple-800,
+.dark .text-green-800,
+.dark .text-red-800 {
   color: var(--text-muted);
 }
 
@@ -112,7 +116,11 @@ body {
 }
 
 .dark .bg-gray-100 {
-  background-color: #111827;
+  background-color: #111111;
+}
+
+.dark .hover\:bg-gray-100:hover {
+  background-color: #111111;
 }
 
 .bg-blue-600 {
