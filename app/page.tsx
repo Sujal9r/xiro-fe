@@ -18,7 +18,7 @@ export default function Home() {
             <span className="h-11 w-11 rounded-2xl bg-white text-gray-900 flex items-center justify-center">
               A
             </span>
-            Atto Workspace
+            Xiro
           </div>
           <div className="flex items-center gap-3">
             <button

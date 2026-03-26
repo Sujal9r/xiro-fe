@@ -105,6 +105,7 @@ interface MeDashboardData {
   }>;
   attendanceLogs: AttendanceLog[];
   approvedLeaves?: ApprovedLeave[];
+  activeWFHRequests?: ApprovedLeave[];
   regularizationBalance?: number;
   regularizationRequests?: RegularizationRequest[];
 }
@@ -112,6 +113,8 @@ interface MeDashboardData {
 interface ApprovedLeave {
   fromDate: string;
   toDate: string;
+  status?: "approved";
+  typeKey?: string;
   totalDays?: number;
   halfDay?: boolean;
   leaveUnit?: "full_day" | "half_day" | "partial_day";
@@ -119,6 +122,11 @@ interface ApprovedLeave {
   partialMinutes?: number;
   partialDayPosition?: "start" | "end" | "";
   typeName?: string;
+  geofenceLocation?: {
+    latitude?: number | null;
+    longitude?: number | null;
+    radius?: number | null;
+  };
 }
 
 interface OfficeBranch {
@@ -145,6 +153,11 @@ interface DashboardResponse {
     role: string;
     createdAt?: string;
     shift?: { startTime?: string; endTime?: string };
+    wfhBaseLocation?: {
+      latitude?: number | null;
+      longitude?: number | null;
+      radius?: number | null;
+    };
   };
   permissions: PermissionKey[];
   admin?: AdminDashboardData;
@@ -183,6 +196,30 @@ const distanceBetween = (lat1: number, lng1: number, lat2: number, lng2: number)
       Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return EARTH_RADIUS_METERS * c;
+};
+
+const buildMiniMapData = (coords?: { lat: number; lng: number } | null, radiusMeters = 100) => {
+  if (!coords) return null;
+
+  const mapDelta = 0.01;
+  const mapLat = coords.lat;
+  const mapLng = coords.lng;
+  const mapNorth = mapLat + mapDelta;
+  const mapSouth = mapLat - mapDelta;
+  const mapWest = mapLng - mapDelta;
+  const mapEast = mapLng + mapDelta;
+  const metersPerDegreeLng = 111320 * Math.cos((mapLat * Math.PI) / 180);
+  const mapWidthMeters = Math.max(1, (mapEast - mapWest) * metersPerDegreeLng);
+  const toMapPercent = (lat: number, lng: number) => ({
+    left: ((lng - mapWest) / (mapEast - mapWest)) * 100,
+    top: ((mapNorth - lat) / (mapNorth - mapSouth)) * 100,
+  });
+
+  return {
+    src: `https://www.openstreetmap.org/export/embed.html?bbox=${mapLng - mapDelta}%2C${mapLat - mapDelta}%2C${mapLng + mapDelta}%2C${mapLat + mapDelta}&layer=mapnik`,
+    point: toMapPercent(mapLat, mapLng),
+    diameterPercent: (radiusMeters * 2 * 100) / mapWidthMeters,
+  };
 };
 
 const toMinutes = (time: string) => {
@@ -250,6 +287,17 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [clocking, setClocking] = useState(false);
+  const [wfhApplying, setWfhApplying] = useState(false);
+  const [wfhModalOpen, setWfhModalOpen] = useState(false);
+  const [attendancePolicyModalOpen, setAttendancePolicyModalOpen] = useState(false);
+  const [wfhFormDate, setWfhFormDate] = useState(toDateKey(new Date()));
+  const [wfhFormReason, setWfhFormReason] = useState("");
+  const [wfhRequestCoords, setWfhRequestCoords] = useState<{
+    lat: number;
+    lng: number;
+    accuracy: number;
+  } | null>(null);
+  const [wfhLocationLoading, setWfhLocationLoading] = useState(false);
   const [range, setRange] = useState<RangeOption>(30);
   const [now, setNow] = useState(new Date());
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -264,6 +312,12 @@ export default function DashboardPage() {
     null,
   );
   const [matchedBranch, setMatchedBranch] = useState<OfficeBranch | null>(null);
+  const [wfhGeoMessage, setWfhGeoMessage] = useState("");
+  const [wfhGeoDistance, setWfhGeoDistance] = useState<number | null>(null);
+  const [wfhGeoInside, setWfhGeoInside] = useState<boolean | null>(null);
+  const [wfhGeoCoords, setWfhGeoCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(
+    null,
+  );
   const [regularizeModalOpen, setRegularizeModalOpen] = useState(false);
   const [regularizeLogsModalOpen, setRegularizeLogsModalOpen] = useState(false);
   const [regularizeDate, setRegularizeDate] = useState(toDateKey(new Date()));
@@ -286,7 +340,38 @@ export default function DashboardPage() {
     checkOut: string;
   } | null>(null);
   const geoWatchIdRef = useRef<number | null>(null);
+  const wfhWatchIdRef = useRef<number | null>(null);
+  const lastWFHInsideRef = useRef<boolean | null>(null);
   const { showAlert } = useAlert();
+  const permissions = (data?.permissions || []) as PermissionKey[];
+  const canClock = permissions.includes(PERMISSIONS.ATTENDANCE_CLOCK);
+  const canApplyLeave = permissions.includes(PERMISSIONS.LEAVE_APPLY);
+  const canRegularize = permissions.includes(PERMISSIONS.ATTENDANCE_REGULARIZATION_REQUEST);
+  const canReviewRegularization = permissions.includes(
+    PERMISSIONS.ATTENDANCE_REGULARIZATION_REVIEW,
+  );
+  const approvedLeaves = data?.me?.approvedLeaves || [];
+  const activeWFHRequests = data?.me?.activeWFHRequests || [];
+  const activeWFHLeave = useMemo(() => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    return activeWFHRequests.find((leave) => {
+      if (leave.typeKey !== "wfh") return false;
+      const start = new Date(leave.fromDate);
+      const end = new Date(leave.toDate);
+      return (
+        !Number.isNaN(start.getTime()) &&
+        !Number.isNaN(end.getTime()) &&
+        start <= todayEnd &&
+        end >= todayStart &&
+        Number.isFinite(leave.geofenceLocation?.latitude) &&
+        Number.isFinite(leave.geofenceLocation?.longitude)
+      );
+    });
+  }, [activeWFHRequests]);
 
   useEffect(() => {
     fetchDashboard();
@@ -486,15 +571,73 @@ export default function DashboardPage() {
     };
   }, [locationModalOpen, locationAction]);
 
-  const permissions = (data?.permissions || []) as PermissionKey[];
-  const canClock = permissions.includes(PERMISSIONS.ATTENDANCE_CLOCK);
-  const canRegularize = permissions.includes(PERMISSIONS.ATTENDANCE_REGULARIZATION_REQUEST);
-  const canReviewRegularization = permissions.includes(
-    PERMISSIONS.ATTENDANCE_REGULARIZATION_REVIEW,
-  );
+  useEffect(() => {
+    if (!canClock || !activeWFHLeave) {
+      if (wfhWatchIdRef.current !== null && typeof navigator !== "undefined" && navigator.geolocation) {
+        navigator.geolocation.clearWatch(wfhWatchIdRef.current);
+        wfhWatchIdRef.current = null;
+      }
+      lastWFHInsideRef.current = null;
+      setWfhGeoMessage("");
+      setWfhGeoDistance(null);
+      setWfhGeoInside(null);
+      setWfhGeoCoords(null);
+      return;
+    }
+
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setWfhGeoMessage("Geolocation is not supported for WFH auto tracking on this device.");
+      return;
+    }
+
+    setWfhGeoMessage("WFH geofence tracking is active.");
+
+    const watchId = navigator.geolocation.watchPosition(
+      async (position) => {
+        const coords = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        };
+        const distance = getWFHGeofenceDistance(coords);
+        const radius = Math.max(1, Number(activeWFHLeave.geofenceLocation?.radius || 100));
+        const inside = distance !== null ? distance <= radius : false;
+
+        setWfhGeoCoords(coords);
+        setWfhGeoDistance(distance !== null ? Math.round(distance) : null);
+        setWfhGeoInside(inside);
+        setWfhGeoMessage(
+          inside
+            ? "Inside your approved WFH zone. Attendance can auto clock in."
+            : "Outside your approved WFH zone. Attendance can auto clock out.",
+        );
+
+        if (lastWFHInsideRef.current === inside) return;
+        lastWFHInsideRef.current = inside;
+
+        try {
+          await handleWFHGeofenceEvent(inside ? "enter" : "exit", coords);
+        } catch (error) {
+          setWfhGeoMessage(getErrorMessage(error, "Failed to sync WFH geofence event."));
+        }
+      },
+      (error) => {
+        setWfhGeoMessage(error.message || "Unable to read your WFH live location.");
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+    );
+
+    wfhWatchIdRef.current = watchId;
+
+    return () => {
+      if (wfhWatchIdRef.current !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(wfhWatchIdRef.current);
+        wfhWatchIdRef.current = null;
+      }
+    };
+  }, [activeWFHLeave, canClock]);
 
   const attendance = data?.me?.attendanceLogs || [];
-  const approvedLeaves = data?.me?.approvedLeaves || [];
   const tickets = data?.me?.tickets || [];
   const myRegularizationRequests = data?.me?.regularizationRequests || [];
   const hrRegularizationRequests = data?.hr?.regularizationRequests || [];
@@ -545,6 +688,176 @@ export default function DashboardPage() {
   const getErrorMessage = (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback;
 
+  const refreshDashboardSnapshot = async () => {
+    const dashboardData = await apiCall("/api/dashboard");
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            me: dashboardData.me || prev.me,
+            hr: dashboardData.hr || prev.hr,
+            permissions: dashboardData.permissions || prev.permissions,
+            user: dashboardData.user || prev.user,
+          }
+        : dashboardData,
+    );
+  };
+
+  const openWFHModal = () => {
+    if (activeWFHLeave) {
+      showAlert("Work From Home is already active for today.");
+      return;
+    }
+
+    setWfhFormDate(toDateKey(new Date()));
+    setWfhFormReason("");
+    setWfhRequestCoords(
+      data?.user?.wfhBaseLocation?.latitude && data?.user?.wfhBaseLocation?.longitude
+        ? {
+            lat: Number(data.user.wfhBaseLocation.latitude),
+            lng: Number(data.user.wfhBaseLocation.longitude),
+            accuracy: 0,
+          }
+        : null,
+    );
+    setWfhModalOpen(true);
+  };
+
+  const captureWFHRequestLocation = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      showAlert("Geolocation is not supported on this device/browser");
+      return;
+    }
+
+    setWfhLocationLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setWfhRequestCoords({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        });
+        setWfhLocationLoading(false);
+      },
+      (error) => {
+        setWfhLocationLoading(false);
+        showAlert(error.message || "Unable to capture your current location");
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  };
+
+  const submitWFHRequestFromDashboard = async () => {
+    if (!wfhFormDate) {
+      showAlert("Select a WFH date.");
+      return false;
+    }
+    if (!wfhFormReason.trim()) {
+      showAlert("Enter a reason for WFH.");
+      return false;
+    }
+    if (!wfhRequestCoords) {
+      showAlert("Fetch your current location before submitting WFH.");
+      return false;
+    }
+
+    setWfhApplying(true);
+    try {
+      await apiCall("/api/leaves/apply", {
+        method: "POST",
+        body: JSON.stringify({
+          typeKey: "wfh",
+          fromDate: wfhFormDate,
+          toDate: wfhFormDate,
+          leaveUnit: "full_day",
+          halfDaySession: "",
+          partialMinutes: 0,
+          partialDayPosition: "",
+          reason: wfhFormReason.trim(),
+          attachmentUrl: "",
+          latitude: wfhRequestCoords.lat,
+          longitude: wfhRequestCoords.lng,
+        }),
+      });
+      await refreshDashboardSnapshot();
+      return true;
+    } catch (error) {
+      showAlert(getErrorMessage(error, "Failed to apply Work From Home"));
+      return false;
+    } finally {
+      setWfhApplying(false);
+    }
+  };
+
+  const handleWFHClockFromModal = async () => {
+    if (!wfhRequestCoords) {
+      showAlert("Fetch your current location first.");
+      return;
+    }
+    const isTodayRequest = wfhFormDate === toDateKey(new Date());
+    if (!activeWFHLeave) {
+      const submitted = await submitWFHRequestFromDashboard();
+      if (!submitted) return;
+
+      if (!isTodayRequest) {
+        setWfhModalOpen(false);
+        showAlert("WFH request submitted for the selected date.");
+        return;
+      }
+    }
+
+    setClocking(true);
+    try {
+      await refreshDashboardSnapshot();
+      const response = await handleWFHGeofenceEvent(
+        isClockedIn ? "exit" : "enter",
+        wfhRequestCoords,
+        isClockedIn,
+      );
+      setWfhModalOpen(false);
+      showAlert(response?.message || "WFH attendance synced.");
+    } catch (error) {
+      showAlert(getErrorMessage(error, "Failed to sync WFH attendance"));
+    } finally {
+      setClocking(false);
+    }
+  };
+
+  const getWFHGeofenceDistance = (coords: { lat: number; lng: number }) => {
+    if (
+      !activeWFHLeave?.geofenceLocation?.latitude ||
+      !activeWFHLeave?.geofenceLocation?.longitude
+    ) {
+      return null;
+    }
+
+    return distanceBetween(
+      coords.lat,
+      coords.lng,
+      activeWFHLeave.geofenceLocation.latitude,
+      activeWFHLeave.geofenceLocation.longitude,
+    );
+  };
+
+  const handleWFHGeofenceEvent = async (
+    eventType: "enter" | "exit",
+    coords?: { lat: number; lng: number; accuracy: number } | null,
+    force = false,
+  ) => {
+    const response = await apiCall("/api/attendance/wfh-geofence-event", {
+      method: "POST",
+      body: JSON.stringify({
+        latitude: coords?.lat,
+        longitude: coords?.lng,
+        eventType,
+        force,
+      }),
+    });
+
+    await refreshDashboardSnapshot();
+    return response;
+  };
+
   const performClockAction = async (
     action: "clockIn" | "clockOut",
     coords?: { lat: number; lng: number; accuracy: number } | null,
@@ -583,6 +896,19 @@ export default function DashboardPage() {
   };
 
   const handleClockIn = async () => {
+    if (activeWFHLeave) {
+      setClocking(true);
+      try {
+        const response = await handleWFHGeofenceEvent("enter");
+        showAlert(response?.message || "WFH clock-in synced.");
+      } catch (error) {
+        showAlert(getErrorMessage(error, "Failed to clock in for WFH"));
+      } finally {
+        setClocking(false);
+      }
+      return;
+    }
+
     if (!geofence?.enabled) {
       await performClockAction("clockIn");
       return;
@@ -593,6 +919,19 @@ export default function DashboardPage() {
   };
 
   const handleClockOut = async () => {
+    if (activeWFHLeave) {
+      setClocking(true);
+      try {
+        const response = await handleWFHGeofenceEvent("exit", null, true);
+        showAlert(response?.message || "WFH clock-out synced.");
+      } catch (error) {
+        showAlert(getErrorMessage(error, "Failed to clock out for WFH"));
+      } finally {
+        setClocking(false);
+      }
+      return;
+    }
+
     if (!geofence?.enabled || geofence.enforceClockOut === false) {
       await performClockAction("clockOut", geofence?.enabled ? geoCoords : undefined);
       return;
@@ -603,16 +942,7 @@ export default function DashboardPage() {
   };
 
   const refreshRegularizationFromDashboard = async () => {
-    const dashboardData = await apiCall("/api/dashboard");
-    setData((prev) =>
-      prev
-        ? {
-            ...prev,
-            me: dashboardData.me || prev.me,
-            hr: dashboardData.hr || prev.hr,
-          }
-        : dashboardData,
-    );
+    await refreshDashboardSnapshot();
   };
 
   const submitRegularization = async (
@@ -909,6 +1239,10 @@ export default function DashboardPage() {
     geoCoords
       ? `https://www.openstreetmap.org/export/embed.html?bbox=${mapLng - mapDelta}%2C${mapLat - mapDelta}%2C${mapLng + mapDelta}%2C${mapLat + mapDelta}&layer=mapnik`
       : "";
+  const wfhPreviewMap = buildMiniMapData(
+    wfhRequestCoords ? { lat: wfhRequestCoords.lat, lng: wfhRequestCoords.lng } : null,
+    100,
+  );
 
   return (
     <DashboardLayout>
@@ -1040,20 +1374,66 @@ export default function DashboardPage() {
                         {clocking
                           ? "Please wait..."
                           : isClockedIn
-                          ? "Clock Out"
+                          ? activeWFHLeave
+                            ? "WFH Clock Out"
+                            : "Clock Out"
+                          : activeWFHLeave
+                          ? "WFH Clock In"
                           : "Web Clock-in"}
                       </button>
                     ) : (
                       <div className="text-sm text-gray-500">Clock-in unavailable</div>
                     )}
                   </div>
-                  <div className="mt-4 text-xs text-blue-600 space-y-1">
-                    <div className="cursor-pointer hover:underline">Forgot ID</div>
-                    <div className="cursor-pointer hover:underline">Remote Clock-in</div>
-                    <div className="cursor-pointer hover:underline">Work From Home</div>
-                    <div className="cursor-pointer hover:underline">
-                      Attendance Policy
+                  {activeWFHLeave && (
+                    <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+                      <div className="font-semibold">Approved WFH geofence active</div>
+                      <div className="mt-1">
+                        A 100 meter home geofence is being tracked for today. Entering the zone can
+                        auto clock in, and leaving it can auto clock out.
+                      </div>
+                      <div className="mt-2">
+                        {wfhGeoInside === null
+                          ? "Location status pending"
+                          : wfhGeoInside
+                          ? "Inside WFH fence"
+                          : "Outside WFH fence"}
+                        {wfhGeoCoords
+                          ? ` · ${wfhGeoCoords.lat.toFixed(4)}, ${wfhGeoCoords.lng.toFixed(4)}`
+                          : ""}
+                      </div>
+                      <div className="mt-1">
+                        {wfhGeoMessage || "Waiting for live location..."}
+                        {wfhGeoDistance !== null ? ` · Distance ${wfhGeoDistance}m` : ""}
+                      </div>
                     </div>
+                  )}
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-blue-600">
+                    {canApplyLeave ? (
+                      <button
+                        type="button"
+                        onClick={openWFHModal}
+                        disabled={wfhApplying || Boolean(activeWFHLeave)}
+                        className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-left font-medium text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {wfhApplying
+                          ? "Applying WFH..."
+                          : activeWFHLeave
+                          ? "WFH Geofence Active"
+                          : "Apply Work From Home"}
+                      </button>
+                    ) : (
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-gray-500">
+                        Work From Home
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setAttendancePolicyModalOpen(true)}
+                      className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-left font-medium text-blue-700 transition hover:bg-blue-100"
+                    >
+                      Attendance Policy
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1199,13 +1579,16 @@ export default function DashboardPage() {
                             ? Math.max(0, log.lateMinutes)
                             : computedLateMinutes;
                         const isHalfDayLeave = leaveInfo?.unit === "half_day";
+                        const isFullDayLeave = leaveInfo?.unit === "full_day";
                         const hasPenalty =
-                          isHalfDayLeave
+                          isHalfDayLeave || isFullDayLeave
                             ? false
                             : typeof log.hasPenalty === "boolean"
                             ? log.hasPenalty
                             : lateMinutes > PENALTY_LATE_MINUTES;
-                        const arrivalStatus = isHalfDayLeave
+                        const arrivalStatus = isFullDayLeave
+                          ? { label: "On Leave", className: "bg-green-100 text-green-700" }
+                          : isHalfDayLeave
                           ? { label: "Half Day Leave", className: "bg-blue-100 text-blue-700" }
                           : resolveArrivalStatus(lateMinutes, hasPenalty, false);
                         const rowDate = toDateKey(new Date(firstCheckIn));
@@ -2027,6 +2410,232 @@ export default function DashboardPage() {
           </button>
         </div>
       </Modal>
+      <Modal
+        open={wfhModalOpen}
+        title="Work From Home"
+        description="Fill the required WFH details, fetch your location, then submit the request or use the same location for WFH clocking when enabled."
+        onClose={() => setWfhModalOpen(false)}
+        size="lg"
+      >
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">WFH Date</label>
+              <input
+                type="date"
+                value={wfhFormDate}
+                onChange={(e) => setWfhFormDate(e.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 p-2 text-black"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Reason</label>
+              <textarea
+                rows={5}
+                value={wfhFormReason}
+                onChange={(e) => setWfhFormReason(e.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 p-2 text-black"
+              />
+            </div>
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <div className="text-sm font-semibold text-blue-900">Location for WFH</div>
+              <div className="mt-1 text-sm text-blue-700">
+                Fetch current location to set the WFH geofence. You can also use this location for clocking when WFH is active.
+              </div>
+              {wfhRequestCoords && (
+                <div className="mt-2 text-xs text-blue-800">
+                  {wfhRequestCoords.lat.toFixed(6)}, {wfhRequestCoords.lng.toFixed(6)} · Accuracy{" "}
+                  {Math.round(wfhRequestCoords.accuracy)}m
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={captureWFHRequestLocation}
+                disabled={wfhLocationLoading}
+                className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {wfhLocationLoading
+                  ? "Fetching..."
+                  : wfhRequestCoords
+                  ? "Refresh Location"
+                  : "Fetch Location"}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-4">
+            {wfhPreviewMap ? (
+              <div className="overflow-hidden rounded-xl border border-blue-200 bg-white">
+                <div className="relative h-64 w-full">
+                  <iframe
+                    title="WFH Geofence Map"
+                    src={wfhPreviewMap.src}
+                    className="h-full w-full"
+                    loading="lazy"
+                  />
+                  <div className="pointer-events-none absolute inset-0">
+                    <div
+                      className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-500/70 bg-blue-500/15"
+                      style={{
+                        left: `${wfhPreviewMap.point.left}%`,
+                        top: `${wfhPreviewMap.point.top}%`,
+                        width: `${wfhPreviewMap.diameterPercent}%`,
+                        height: `${wfhPreviewMap.diameterPercent}%`,
+                      }}
+                    />
+                    <div
+                      className="absolute -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white"
+                      style={{
+                        left: `${wfhPreviewMap.point.left}%`,
+                        top: `${wfhPreviewMap.point.top}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="border-t border-blue-100 px-3 py-2 text-xs text-blue-800">
+                  Your live point is shown with a 100 meter WFH geofence.
+                </div>
+                <div className="border-t border-blue-100 p-3">
+                  <button
+                    type="button"
+                    onClick={handleWFHClockFromModal}
+                    disabled={clocking || wfhApplying || !wfhRequestCoords}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
+                  >
+                    {clocking || wfhApplying
+                      ? "Please wait..."
+                      : activeWFHLeave && isClockedIn
+                      ? "Clock Out"
+                      : "Clock In"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 text-center text-sm text-gray-500">
+                Fetch location to preview the WFH geofence map.
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
+      {attendancePolicyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8">
+          <button
+            type="button"
+            aria-label="Close attendance policy"
+            className="absolute inset-0 backdrop-blur-sm"
+            style={{ backgroundColor: "color-mix(in srgb, var(--accent-700) 52%, black)" }}
+            onClick={() => setAttendancePolicyModalOpen(false)}
+          />
+          <div
+            className="relative z-10 w-full max-w-5xl overflow-hidden rounded-[32px] border shadow-2xl"
+            style={{
+              borderColor: "var(--border)",
+              backgroundColor: "var(--card)",
+              color: "var(--foreground)",
+              boxShadow: "0 24px 80px color-mix(in srgb, var(--accent-700) 18%, transparent)",
+            }}
+          >
+            <div
+              className="px-8 py-7"
+              style={{
+                color: "white",
+                background:
+                  "linear-gradient(135deg, var(--accent-700), var(--accent-600), var(--accent-500))",
+              }}
+            >
+              <div className="flex items-start justify-between gap-6">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.28em] text-white/80">
+                    Attendance Guide
+                  </div>
+                  <h2 className="mt-3 text-3xl font-semibold">Attendance Policy</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-white/85">
+                    Review the written attendance rules for office clocking, Work From Home geofencing,
+                    shift timing, and regularization.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAttendancePolicyModalOpen(false)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-xl text-white transition hover:bg-white/20"
+                >
+                  &times;
+                </button>
+              </div>
+            </div>
+
+            <div
+              className="max-h-[78vh] overflow-y-auto p-8"
+              style={{ backgroundColor: "color-mix(in srgb, var(--accent-500) 8%, var(--background))" }}
+            >
+              <div className="grid gap-6 lg:grid-cols-2">
+                <section
+                  className="rounded-3xl border p-6 shadow-sm"
+                  style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
+                >
+                  <h3 className="text-lg font-semibold" style={{ color: "var(--foreground)" }}>
+                    Office Attendance
+                  </h3>
+                  <p className="mt-3 text-sm leading-7" style={{ color: "var(--text-muted)" }}>
+                    Employees must clock in and clock out from the approved office geofence whenever
+                    office location rules are enabled. If clock-out restriction is active, users must
+                    remain inside the mapped branch boundary to complete clock-out successfully.
+                  </p>
+                </section>
+
+                <section
+                  className="rounded-3xl border p-6 shadow-sm"
+                  style={{
+                    borderColor: "color-mix(in srgb, var(--accent-500) 28%, var(--border))",
+                    backgroundColor: "color-mix(in srgb, var(--accent-500) 12%, var(--card))",
+                  }}
+                >
+                  <h3 className="text-lg font-semibold" style={{ color: "var(--foreground)" }}>
+                    Work From Home Attendance
+                  </h3>
+                  <p className="mt-3 text-sm leading-7" style={{ color: "var(--foreground)" }}>
+                    WFH requires a leave request with the employee&apos;s current location. That location
+                    becomes the center of a fixed 100 meter WFH geofence for the approved day.
+                  </p>
+                  <p className="mt-3 text-sm leading-7" style={{ color: "var(--foreground)" }}>
+                    When WFH is active and geofence tracking is enabled, entering the fence can auto
+                    clock in and leaving the fence can auto clock out. Users can also fetch location
+                    manually from the dashboard or leave panel and sync WFH clocking there.
+                  </p>
+                </section>
+
+                <section
+                  className="rounded-3xl border p-6 shadow-sm"
+                  style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
+                >
+                  <h3 className="text-lg font-semibold" style={{ color: "var(--foreground)" }}>
+                    Late Arrival And Shift Timing
+                  </h3>
+                  <p className="mt-3 text-sm leading-7" style={{ color: "var(--text-muted)" }}>
+                    Attendance is measured against the assigned shift start and end times. Late
+                    arrivals, penalties, and early clock-out indicators are calculated from the
+                    recorded attendance session.
+                  </p>
+                </section>
+
+                <section
+                  className="rounded-3xl border p-6 shadow-sm"
+                  style={{ borderColor: "var(--border)", backgroundColor: "var(--card)" }}
+                >
+                  <h3 className="text-lg font-semibold" style={{ color: "var(--foreground)" }}>
+                    Regularization
+                  </h3>
+                  <p className="mt-3 text-sm leading-7" style={{ color: "var(--text-muted)" }}>
+                    If a clock-in, clock-out, or penalty entry needs correction, employees can raise
+                    a regularization request. Approval depends on the remaining regularization balance
+                    and the configured review workflow.
+                  </p>
+                </section>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <Modal
         open={locationModalOpen}
         title={locationAction === "clockIn" ? "Clock In with Location" : "Clock Out with Location"}

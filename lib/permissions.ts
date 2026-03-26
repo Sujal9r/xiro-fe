@@ -43,6 +43,16 @@ export const PERMISSIONS = {
   ATTENDANCE_CLOCK: "attendance.clock",
   ATTENDANCE_REGULARIZATION_REQUEST: "attendance.regularization.request",
   ATTENDANCE_REGULARIZATION_REVIEW: "attendance.regularization.review",
+  LEAVE_PENALTY_WAIVER: "leave.penalty.waiver",
+  FINANCE_TAX_VIEW: "finance.tax.view",
+  FINANCE_TAX_ADD: "finance.tax.add",
+  FINANCE_TAX_EDIT: "finance.tax.edit",
+  FINANCE_TAX_DELETE: "finance.tax.delete",
+  FINANCE_TAX_TYPE_MANAGE: "finance.tax.type.manage",
+  FINANCE_PAYROLL_VIEW_MONTHLY: "finance.payroll.view.monthly",
+  FINANCE_PAYROLL_VIEW_ANNUAL: "finance.payroll.view.annual",
+  FINANCE_PAYROLL_EDIT: "finance.payroll.edit",
+  FINANCE_PAYSLIP_GENERATE: "finance.payslip.generate",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -92,6 +102,16 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   [PERMISSIONS.ATTENDANCE_CLOCK]: "Attendance Clock",
   [PERMISSIONS.ATTENDANCE_REGULARIZATION_REQUEST]: "Attendance: Raise Regularization",
   [PERMISSIONS.ATTENDANCE_REGULARIZATION_REVIEW]: "Attendance: Review Regularization",
+  [PERMISSIONS.LEAVE_PENALTY_WAIVER]: "Leave: Waive Penalty",
+  [PERMISSIONS.FINANCE_TAX_VIEW]: "Finance: View Taxes",
+  [PERMISSIONS.FINANCE_TAX_ADD]: "Finance: Add Tax",
+  [PERMISSIONS.FINANCE_TAX_EDIT]: "Finance: Edit Tax",
+  [PERMISSIONS.FINANCE_TAX_DELETE]: "Finance: Delete Tax",
+  [PERMISSIONS.FINANCE_TAX_TYPE_MANAGE]: "Finance: Manage Tax Types",
+  [PERMISSIONS.FINANCE_PAYROLL_VIEW_MONTHLY]: "Finance: View Monthly Payroll",
+  [PERMISSIONS.FINANCE_PAYROLL_VIEW_ANNUAL]: "Finance: View Annual Payroll",
+  [PERMISSIONS.FINANCE_PAYROLL_EDIT]: "Finance: Edit Payroll",
+  [PERMISSIONS.FINANCE_PAYSLIP_GENERATE]: "Finance: Generate Payslip",
 };
 
 export const PERMISSION_GROUPS: Array<{
@@ -145,6 +165,7 @@ export const PERMISSION_GROUPS: Array<{
       PERMISSIONS.LEAVE_POLICY_MANAGE,
       PERMISSIONS.LEAVE_REPORTS_VIEW,
       PERMISSIONS.LEAVE_REPORTS_EXPORT,
+      PERMISSIONS.LEAVE_PENALTY_WAIVER,
     ],
   },
   {
@@ -174,7 +195,20 @@ export const PERMISSION_GROUPS: Array<{
   {
     id: "finance",
     title: "Finance",
-    permissions: [PERMISSIONS.VIEW_ADMIN_FINANCE, PERMISSIONS.VIEW_USER_FINANCE, PERMISSIONS.MANAGE_EXPENSES],
+    permissions: [
+      PERMISSIONS.VIEW_ADMIN_FINANCE,
+      PERMISSIONS.VIEW_USER_FINANCE,
+      PERMISSIONS.MANAGE_EXPENSES,
+      PERMISSIONS.FINANCE_TAX_VIEW,
+      PERMISSIONS.FINANCE_TAX_ADD,
+      PERMISSIONS.FINANCE_TAX_EDIT,
+      PERMISSIONS.FINANCE_TAX_DELETE,
+      PERMISSIONS.FINANCE_TAX_TYPE_MANAGE,
+      PERMISSIONS.FINANCE_PAYROLL_VIEW_MONTHLY,
+      PERMISSIONS.FINANCE_PAYROLL_VIEW_ANNUAL,
+      PERMISSIONS.FINANCE_PAYROLL_EDIT,
+      PERMISSIONS.FINANCE_PAYSLIP_GENERATE,
+    ],
   },
   {
     id: "shifts",

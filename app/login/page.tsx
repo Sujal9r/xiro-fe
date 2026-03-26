@@ -86,7 +86,7 @@ export default function Login() {
                   <span className="h-10 w-10 rounded-2xl bg-white/90 text-gray-900 flex items-center justify-center">
                     A
                   </span>
-                  Atto Workspace
+                  Xiro
                 </div>
                 <p className="mt-3 text-white/70 text-sm">
                   Attendance, leaves, and team operations in one place.
@@ -111,7 +111,7 @@ export default function Login() {
                   </div>
                 </div>
               </div>
-              <div className="text-xs text-white/50">© 2026 Atto Workspace</div>
+              <div className="text-xs text-white/50">© 2026 Xiro</div>
             </div>
 
             <div className="bg-white text-gray-900 p-8 sm:p-10">

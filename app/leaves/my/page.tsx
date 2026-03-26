@@ -63,10 +63,14 @@ export default function MyLeavesPage() {
 
   const formatDate = (value: string) =>
     new Date(value).toLocaleDateString("en-US", {
-      year: "numeric",
       month: "short",
       day: "numeric",
     });
+
+  const formatLeaveDates = (leave: LeaveRequest) =>
+    formatDate(leave.fromDate) === formatDate(leave.toDate)
+      ? formatDate(leave.fromDate)
+      : `${formatDate(leave.fromDate)} - ${formatDate(leave.toDate)}`;
 
   const formatLeaveUnit = (leave: LeaveRequest) => {
     const unit = leave.leaveUnit || "full_day";
@@ -106,7 +110,7 @@ export default function MyLeavesPage() {
                     Type
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Dates
+                    Date
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Days
@@ -134,7 +138,7 @@ export default function MyLeavesPage() {
                       {leave.typeName}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {formatDate(leave.fromDate)} - {formatDate(leave.toDate)}
+                      {formatLeaveDates(leave)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">{leave.totalDays}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">

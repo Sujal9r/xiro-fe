@@ -215,7 +215,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             >
               <Dialog.Panel className="relative flex w-72 max-w-full flex-col bg-white shadow-xl">
                 <div className="h-16 flex items-center justify-between px-4 border-b border-gray-100">
-                  <span className="font-semibold text-gray-900">Atto App</span>
+                  <span className="font-semibold text-gray-900">Xiro</span>
                   <button
                     onClick={() => setMobileSidebarOpen(false)}
                     className="inline-flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-600 hover:bg-gray-100 transition"
@@ -251,7 +251,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="h-16 flex items-center justify-between px-4 border-b border-gray-100">
           <div className="flex items-center gap-3 overflow-hidden min-w-0">
             {!sidebarCollapsed && (
-              <span className="font-semibold text-gray-900">Atto App</span>
+              <span className="font-semibold text-gray-900">Xiro</span>
             )}
           </div>
         </div>

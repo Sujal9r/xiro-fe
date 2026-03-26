@@ -79,7 +79,7 @@ export default function Signup() {
                   <span className="h-10 w-10 rounded-2xl bg-white/90 text-gray-900 flex items-center justify-center">
                     A
                   </span>
-                  Atto Workspace
+                  Xiro
                 </div>
                 <p className="mt-3 text-white/70 text-sm">
                   Get access to attendance, leaves, and team controls.
@@ -98,7 +98,7 @@ export default function Signup() {
                   <div className="rounded-xl border border-white/10 bg-white/5 p-3">Team ready</div>
                 </div>
               </div>
-              <div className="text-xs text-white/50">© 2026 Atto Workspace</div>
+              <div className="text-xs text-white/50">© 2026 Xiro</div>
             </div>
 
             <div className="bg-white text-gray-900 p-8 sm:p-10">

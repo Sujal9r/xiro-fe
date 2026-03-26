@@ -143,10 +143,14 @@ export default function LeaveRequestsPage() {
 
   const formatDate = (value: string) =>
     new Date(value).toLocaleDateString("en-US", {
-      year: "numeric",
       month: "short",
       day: "numeric",
     });
+
+  const formatLeaveDates = (req: LeaveRequest) =>
+    formatDate(req.fromDate) === formatDate(req.toDate)
+      ? formatDate(req.fromDate)
+      : `${formatDate(req.fromDate)} - ${formatDate(req.toDate)}`;
 
   const formatLeaveUnit = (req: LeaveRequest) => {
     const unit = req.leaveUnit || "full_day";
@@ -233,7 +237,7 @@ export default function LeaveRequestsPage() {
                     Type
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Dates
+                    Date
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Days
@@ -265,7 +269,7 @@ export default function LeaveRequestsPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">{req.typeName}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {formatDate(req.fromDate)} - {formatDate(req.toDate)}
+                      {formatLeaveDates(req)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">{req.totalDays}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">{formatLeaveUnit(req)}</td>

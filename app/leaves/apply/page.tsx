@@ -13,6 +13,14 @@ interface LeaveType {
   allowHalfDay: boolean;
 }
 
+interface MeProfile {
+  wfhBaseLocation?: {
+    latitude?: number | null;
+    longitude?: number | null;
+    radius?: number | null;
+  };
+}
+
 type LeaveUnit = "full_day" | "half_day" | "partial_day";
 
 const LEAVE_UNIT_LABEL: Record<LeaveUnit, string> = {
@@ -22,6 +30,32 @@ const LEAVE_UNIT_LABEL: Record<LeaveUnit, string> = {
 };
 
 const STANDARD_WORKDAY_MINUTES = 8 * 60;
+const buildMiniMapData = (
+  coords?: { latitude: number; longitude: number } | null,
+  radiusMeters = 100,
+) => {
+  if (!coords) return null;
+
+  const mapDelta = 0.01;
+  const mapLat = coords.latitude;
+  const mapLng = coords.longitude;
+  const mapNorth = mapLat + mapDelta;
+  const mapSouth = mapLat - mapDelta;
+  const mapWest = mapLng - mapDelta;
+  const mapEast = mapLng + mapDelta;
+  const metersPerDegreeLng = 111320 * Math.cos((mapLat * Math.PI) / 180);
+  const mapWidthMeters = Math.max(1, (mapEast - mapWest) * metersPerDegreeLng);
+  const point = {
+    left: ((mapLng - mapWest) / (mapEast - mapWest)) * 100,
+    top: ((mapNorth - mapLat) / (mapNorth - mapSouth)) * 100,
+  };
+
+  return {
+    src: `https://www.openstreetmap.org/export/embed.html?bbox=${mapLng - mapDelta}%2C${mapLat - mapDelta}%2C${mapLng + mapDelta}%2C${mapLat + mapDelta}&layer=mapnik`,
+    point,
+    diameterPercent: (radiusMeters * 2 * 100) / mapWidthMeters,
+  };
+};
 
 const hasWeekendInRange = (fromDate: string, toDate: string) => {
   if (!fromDate || !toDate) return false;
@@ -40,6 +74,13 @@ export default function ApplyLeavePage() {
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [capturingLocation, setCapturingLocation] = useState(false);
+  const [wfhClocking, setWfhClocking] = useState(false);
+  const [savedWFHLocation, setSavedWFHLocation] = useState<{
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+  } | null>(null);
   const { showAlert } = useAlert();
   const [formData, setFormData] = useState({
     typeKey: "",
@@ -53,6 +94,11 @@ export default function ApplyLeavePage() {
     reason: "",
     attachmentUrl: "",
   });
+  const [wfhLocation, setWfhLocation] = useState<{
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+  } | null>(null);
 
   useEffect(() => {
     fetchPolicy();
@@ -60,10 +106,26 @@ export default function ApplyLeavePage() {
 
   const fetchPolicy = async () => {
     try {
-      const policy = await apiCall("/api/leaves/policy");
+      const [policy, me] = await Promise.all([
+        apiCall("/api/leaves/policy"),
+        apiCall("/api/auth/me"),
+      ]);
       setLeaveTypes(policy.leaveTypes || []);
       if (policy.leaveTypes?.length) {
         setFormData((prev) => ({ ...prev, typeKey: policy.leaveTypes[0].key }));
+      }
+      const profile = me as MeProfile;
+      if (
+        Number.isFinite(profile.wfhBaseLocation?.latitude) &&
+        Number.isFinite(profile.wfhBaseLocation?.longitude)
+      ) {
+        const nextLocation = {
+          latitude: Number(profile.wfhBaseLocation?.latitude),
+          longitude: Number(profile.wfhBaseLocation?.longitude),
+          accuracy: 0,
+        };
+        setSavedWFHLocation(nextLocation);
+        setWfhLocation(nextLocation);
       }
     } catch (error) {
     } finally {
@@ -101,6 +163,8 @@ export default function ApplyLeavePage() {
   ]);
 
   const selectedType = leaveTypes.find((type) => type.key === formData.typeKey);
+  const isWFHSelected = selectedType?.key === "wfh";
+  const wfhPreviewMap = useMemo(() => buildMiniMapData(wfhLocation, 100), [wfhLocation]);
   const hasWeekendSelection = useMemo(
     () =>
       hasWeekendInRange(
@@ -125,6 +189,69 @@ export default function ApplyLeavePage() {
     }
   }, [selectedType?.allowHalfDay, formData.leaveUnit]);
 
+  useEffect(() => {
+    if (!isWFHSelected) {
+      return;
+    }
+    if (!wfhLocation && savedWFHLocation) {
+      setWfhLocation(savedWFHLocation);
+    }
+  }, [isWFHSelected, savedWFHLocation, wfhLocation]);
+
+  const captureWFHLocation = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      showAlert("Geolocation is not supported on this device/browser");
+      return;
+    }
+
+    setCapturingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextLocation = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        };
+        setSavedWFHLocation(nextLocation);
+        setWfhLocation(nextLocation);
+        setCapturingLocation(false);
+      },
+      (error) => {
+        setCapturingLocation(false);
+        showAlert(error.message || "Unable to capture current location");
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  };
+
+  const handleWFHClockInFromLeavePanel = async () => {
+    if (!wfhLocation) {
+      showAlert("Fetch WFH location first.");
+      return;
+    }
+
+    setWfhClocking(true);
+    try {
+      const response = await apiCall("/api/attendance/wfh-geofence-event", {
+        method: "POST",
+        body: JSON.stringify({
+          latitude: wfhLocation.latitude,
+          longitude: wfhLocation.longitude,
+          eventType: "enter",
+        }),
+      });
+      showAlert(response?.message || "WFH clock-in synced.");
+    } catch (error: unknown) {
+      const message =
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message?: string }).message || "")
+          : "";
+      showAlert(message || "WFH clock-in is only available when today’s WFH is active.");
+    } finally {
+      setWfhClocking(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.leaveUnit !== "partial_day" && !formData.typeKey) {
@@ -133,6 +260,10 @@ export default function ApplyLeavePage() {
     }
     if (hasWeekendSelection) {
       showAlert("Saturday and Sunday are off days. Please select weekdays only.");
+      return;
+    }
+    if (isWFHSelected && !wfhLocation) {
+      showAlert("Capture your current home/work location before applying for Work From Home.");
       return;
     }
     setSubmitting(true);
@@ -151,6 +282,8 @@ export default function ApplyLeavePage() {
             formData.leaveUnit === "partial_day" ? formData.partialDayPosition : "",
           reason: formData.reason,
           attachmentUrl: formData.attachmentUrl,
+          latitude: isWFHSelected ? wfhLocation?.latitude : undefined,
+          longitude: isWFHSelected ? wfhLocation?.longitude : undefined,
         }),
       });
       setFormData({
@@ -165,6 +298,7 @@ export default function ApplyLeavePage() {
         reason: "",
         attachmentUrl: "",
       });
+      setWfhLocation(savedWFHLocation);
       showAlert("Leave applied successfully");
     } catch (error: unknown) {
       const message =
@@ -211,6 +345,83 @@ export default function ApplyLeavePage() {
           ) : (
             <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-700">
               Partial Day is a separate free leave type. Leave type selection is not required.
+            </div>
+          )}
+          {isWFHSelected && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                <div>
+                  <div className="text-sm font-semibold text-blue-900">
+                    Work From Home geofence
+                  </div>
+                  <div className="mt-1 text-sm text-blue-700">
+                    Capture the employee's current location. After approval, dashboard attendance
+                    uses this point with a fixed 100 meter WFH geofence.
+                  </div>
+                  {wfhLocation && (
+                    <div className="mt-2 text-xs text-blue-800">
+                      Saved location: {wfhLocation.latitude.toFixed(6)},{" "}
+                      {wfhLocation.longitude.toFixed(6)} · Accuracy{" "}
+                      {Math.round(wfhLocation.accuracy)}m
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={captureWFHLocation}
+                    disabled={capturingLocation}
+                    className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    {capturingLocation ? "Capturing..." : wfhLocation ? "Refresh Location" : "Use Current Location"}
+                  </button>
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={handleWFHClockInFromLeavePanel}
+                      disabled={wfhClocking || !wfhLocation}
+                      className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 disabled:opacity-50"
+                    >
+                      {wfhClocking ? "Syncing..." : "Clock In After Fetch"}
+                    </button>
+                  </div>
+                </div>
+                {wfhPreviewMap ? (
+                  <div className="overflow-hidden rounded-lg border border-blue-200 bg-white">
+                    <div className="relative h-64 w-full">
+                      <iframe
+                        title="WFH Geofence Map"
+                        src={wfhPreviewMap.src}
+                        className="h-full w-full"
+                        loading="lazy"
+                      />
+                      <div className="pointer-events-none absolute inset-0">
+                        <div
+                          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-500/70 bg-blue-500/15"
+                          style={{
+                            left: `${wfhPreviewMap.point.left}%`,
+                            top: `${wfhPreviewMap.point.top}%`,
+                            width: `${wfhPreviewMap.diameterPercent}%`,
+                            height: `${wfhPreviewMap.diameterPercent}%`,
+                          }}
+                        />
+                        <div
+                          className="absolute -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white"
+                          style={{
+                            left: `${wfhPreviewMap.point.left}%`,
+                            top: `${wfhPreviewMap.point.top}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="border-t border-blue-100 px-3 py-2 text-xs text-blue-800">
+                      Your live point is shown with the 100 meter WFH fence.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-blue-200 bg-white/70 px-4 text-center text-sm text-blue-700">
+                    Fetch location to preview the WFH geofence map.
+                  </div>
+                )}
+              </div>
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
