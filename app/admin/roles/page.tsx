@@ -54,16 +54,15 @@ export default function RoleManagement() {
   const groupedSet = new Set<string>(
   grouped.flatMap((group) => group.permissions as string[])
 );
-  const leftovers = availablePermissions.filter(
-  (perm) =>
-    !groupedSet.has(perm as any) && !hiddenPermissions.has(perm),
-);
+    const leftovers = availablePermissions.filter(
+      (perm) => !groupedSet.has(perm) && !hiddenPermissions.has(perm),
+    );
 
     if (leftovers.length > 0) {
       grouped.push({
         id: "other",
         title: "Other",
-        permissions: leftovers as any,
+        permissions: leftovers as PermissionKey[],
       });
     }
 
@@ -81,7 +80,7 @@ export default function RoleManagement() {
       const rolesData = await apiCall("/api/admin/roles");
       setRoles(rolesData.roles || []);
       setAvailablePermissions(rolesData.availablePermissions || []);
-    } catch (error) {
+    } catch {
     } finally {
       setLoading(false);
     }
@@ -89,8 +88,18 @@ export default function RoleManagement() {
 
   // Check if user can edit system roles (must be superadmin or have MANAGE_ROLES permission)
   const canEditSystemRole = userRole === "superadmin" || userPermissions.includes(PERMISSIONS.MANAGE_ROLES);
+  const canManageRole = (role: Role) => !role.isSystem || userRole === "superadmin";
+  const canDeleteRole = (role: Role) => !role.isSystem;
 
-  const customRoles = useMemo(() => roles, [roles]);
+  const visibleRoles = useMemo(() => roles, [roles]);
+  const systemRoleCount = useMemo(
+    () => visibleRoles.filter((role) => role.isSystem).length,
+    [visibleRoles],
+  );
+  const customRoleCount = useMemo(
+    () => visibleRoles.filter((role) => !role.isSystem).length,
+    [visibleRoles],
+  );
 
   const openEditModal = (role: Role) => {
     setEditingRole(role);
@@ -123,8 +132,8 @@ export default function RoleManagement() {
       setIsCreateMode(false);
       setFormData({ name: "", permissions: [] });
       fetchData();
-    } catch (error: any) {
-      showAlert(error.message || "Failed to create role");
+    } catch (error: unknown) {
+      showAlert(error instanceof Error ? error.message : "Failed to create role");
     }
   };
 
@@ -147,8 +156,8 @@ export default function RoleManagement() {
       setEditingRole(null);
       setFormData({ name: "", permissions: [] });
       fetchData();
-    } catch (error: any) {
-      showAlert(error.message || "Failed to update role");
+    } catch (error: unknown) {
+      showAlert(error instanceof Error ? error.message : "Failed to update role");
     }
   };
 
@@ -159,8 +168,8 @@ export default function RoleManagement() {
         method: "DELETE",
       });
       fetchData();
-    } catch (error: any) {
-      showAlert(error.message || "Failed to delete role");
+    } catch (error: unknown) {
+      showAlert(error instanceof Error ? error.message : "Failed to delete role");
     }
   };
 
@@ -189,56 +198,109 @@ export default function RoleManagement() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900">Role Management</h1>
-          <button
-            onClick={openCreateModal}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Add Role
-          </button>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <h1 className="text-3xl font-bold text-gray-900">Role Management</h1>
+              <p className="text-sm text-gray-500">
+                Manage system and custom roles with a cleaner overview of access groups.
+              </p>
+            </div>
+            <button
+              onClick={openCreateModal}
+              className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            >
+              Add Role
+            </button>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                Total Roles
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{visibleRoles.length}</p>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                System Roles
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{systemRoleCount}</p>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+                Custom Roles
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{customRoleCount}</p>
+            </div>
+          </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="overflow-x-auto overflow-y-auto h-[calc(100vh-18rem)] max-h-[calc(100vh-18rem)] min-h-[18rem]">
             <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50 sticky top-0 z-10">
+            <thead className="sticky top-0 z-10 bg-gray-50/95 backdrop-blur">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
                   Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
                   Type
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
                   Key
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {customRoles.map((role) => (
-                <tr key={role.id}>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                    {role.name}
+              {visibleRoles.map((role) => (
+                <tr key={role.id} className="transition-colors hover:bg-gray-50/80">
+                  <td className="px-6 py-4 text-sm">
+                    <div className="font-semibold text-gray-900">{role.name}</div>
+                    <div className="mt-1 text-xs text-gray-500">
+                      {role.permissions.length} permission{role.permissions.length === 1 ? "" : "s"}
+                    </div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">Custom</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{role.key}</td>
-                  <td className="px-6 py-4 text-sm font-medium space-x-2">
-                    <button
-                      onClick={() => openEditModal(role)}
-                      className="text-blue-600 hover:text-blue-900"
+                  <td className="px-6 py-4 text-sm text-gray-900">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        role.isSystem
+                          ? "bg-violet-100 text-violet-700"
+                          : "bg-emerald-100 text-emerald-700"
+                      }`}
                     >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteRole(role)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
+                      {role.isSystem ? "System" : "Custom"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    <code className="rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700">
+                      {role.key}
+                    </code>
+                  </td>
+                  <td className="px-6 py-4 text-sm font-medium">
+                    {canManageRole(role) ? (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          onClick={() => openEditModal(role)}
+                          className="text-blue-600 transition-colors hover:text-blue-900"
+                        >
+                          Edit
+                        </button>
+                        {canDeleteRole(role) ? (
+                          <button
+                            onClick={() => handleDeleteRole(role)}
+                            className="text-red-600 transition-colors hover:text-red-900"
+                          >
+                            Delete
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">System role</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -246,7 +308,7 @@ export default function RoleManagement() {
                 <tr>
                   <td
                     colSpan={4}
-                    className="px-6 py-8 text-sm text-gray-500 text-center"
+                    className="px-6 py-12 text-center text-sm text-gray-500"
                   >
                     No roles found.
                   </td>

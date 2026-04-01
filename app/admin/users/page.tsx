@@ -51,18 +51,9 @@ export default function UserManagement() {
   });
   const { showAlert } = useAlert();
 
-  useEffect(() => {
-    initPage();
-  }, []);
-
-  const fetchPermissions = async () => {
-    const me = await apiCall("/api/auth/me");
-    const perms = (me.permissions || []) as PermissionKey[];
-    setPermissions(perms);
-    return perms;
-  };
-
-  const fetchUsers = async (perms: PermissionKey[] = permissions) => {
+  const fetchUsers = useCallback(async (
+    perms: PermissionKey[] = permissions,
+  ) => {
     try {
       const canViewAdmin =
         perms.includes(PERMISSIONS.VIEW_ADMIN_USERS) ||
@@ -73,42 +64,52 @@ export default function UserManagement() {
         ? data.filter((user: User) => user.role !== "superadmin")
         : [];
       setUsers(filtered);
-    } catch (error) {
+    } catch {
     }
-  };
+  }, [permissions]);
 
-  const fetchRoles = async () => {
+  const fetchRoles = useCallback(async () => {
     try {
       const data = await apiCall("/api/admin/roles");
       setRoles(data.roles || []);
-    } catch (error) {
+    } catch {
       setRoles([]);
     }
-  };
+  }, []);
 
-  const initPage = async () => {
-    try {
-      const perms = await fetchPermissions();
-      await fetchUsers(perms);
-      if (
-        perms.includes(PERMISSIONS.MANAGE_USERS) ||
-        perms.includes(PERMISSIONS.CREATE_EMPLOYEE) ||
-        perms.includes(PERMISSIONS.EDIT_EMPLOYEE)
-      ) {
-        await fetchRoles();
-      } else {
-        setRoles([]);
+  useEffect(() => {
+    const initPage = async () => {
+      try {
+        const me = await apiCall("/api/auth/me");
+        const perms = (me.permissions || []) as PermissionKey[];
+        setPermissions(perms);
+        await fetchUsers(perms);
+        if (
+          perms.includes(PERMISSIONS.MANAGE_USERS) ||
+          perms.includes(PERMISSIONS.CREATE_EMPLOYEE) ||
+          perms.includes(PERMISSIONS.EDIT_EMPLOYEE)
+        ) {
+          await fetchRoles();
+        } else {
+          setRoles([]);
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  const systemRoles = useMemo(() => [], [roles]);
-  const customRoles = useMemo(() => roles, [roles]);
+    initPage();
+  }, [fetchRoles, fetchUsers]);
+
+  const assignableRoles = useMemo(() => roles, [roles]);
 
   const getRoleLabel = useCallback(
-    (user: User) => (user.role === "custom" ? user.customRole?.name || "Custom" : user.role),
+    (user: User) =>
+      user.role === "custom"
+        ? user.customRole?.name || "Custom"
+        : user.role === "superadmin"
+          ? "Super Admin"
+          : user.role,
     []
   );
 
@@ -175,7 +176,7 @@ export default function UserManagement() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.customRoleId) {
+    if (formData.role !== "superadmin" && !formData.customRoleId) {
       showAlert("Please select a custom role.");
       return;
     }
@@ -184,7 +185,7 @@ export default function UserManagement() {
         method: "POST",
         body: JSON.stringify({
           ...formData,
-          customRoleId: formData.role === "custom" ? formData.customRoleId : null,
+          customRoleId: formData.role === "superadmin" ? null : formData.customRoleId,
         }),
       });
       setShowModal(false);
@@ -196,15 +197,15 @@ export default function UserManagement() {
         customRoleId: "",
       });
       fetchUsers();
-    } catch (error: any) {
-      showAlert(error.message || "Failed to create user");
+    } catch (error: unknown) {
+      showAlert(error instanceof Error ? error.message : "Failed to create user");
     }
   };
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
-    if (!formData.customRoleId) {
+    if (formData.role !== "superadmin" && !formData.customRoleId) {
       showAlert("Please select a custom role.");
       return;
     }
@@ -214,8 +215,8 @@ export default function UserManagement() {
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
-          role: "custom",
-          customRoleId: formData.customRoleId,
+          role: formData.role,
+          customRoleId: formData.role === "superadmin" ? null : formData.customRoleId,
         }),
       });
       setShowModal(false);
@@ -228,8 +229,8 @@ export default function UserManagement() {
         customRoleId: "",
       });
       fetchUsers();
-    } catch (error: any) {
-      showAlert(error.message || "Failed to update user");
+    } catch (error: unknown) {
+      showAlert(error instanceof Error ? error.message : "Failed to update user");
     }
   };
 
@@ -240,8 +241,8 @@ export default function UserManagement() {
         body: JSON.stringify({ isActive: !currentStatus }),
       });
       fetchUsers();
-    } catch (error: any) {
-      showAlert(error.message || "Failed to update user");
+    } catch (error: unknown) {
+      showAlert(error instanceof Error ? error.message : "Failed to update user");
     }
   };
 
@@ -252,8 +253,8 @@ export default function UserManagement() {
         method: "DELETE",
       });
       fetchUsers();
-    } catch (error: any) {
-      showAlert(error.message || "Failed to delete user");
+    } catch (error: unknown) {
+      showAlert(error instanceof Error ? error.message : "Failed to delete user");
     }
   };
 
@@ -263,7 +264,7 @@ export default function UserManagement() {
       name: user.name,
       email: user.email,
       password: "",
-      role: "custom",
+      role: user.role === "superadmin" ? "superadmin" : "custom",
       customRoleId: user.customRole?.id || user.customRole?._id || "",
     });
     setShowModal(true);
@@ -296,12 +297,14 @@ export default function UserManagement() {
   const openCreateModal = () => {
     if (!canCreate) return;
     setEditingUser(null);
+    const firstRole = assignableRoles[0];
     setFormData({
       name: "",
       email: "",
       password: "",
-      role: "custom",
-      customRoleId: "",
+      role: firstRole?.key === "superadmin" ? "superadmin" : "custom",
+      customRoleId:
+        firstRole?.key === "superadmin" ? "" : firstRole?.id || firstRole?._id || "",
     });
     setShowModal(true);
   };
@@ -365,7 +368,7 @@ export default function UserManagement() {
         </div>
 
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+          <div className="overflow-x-auto overflow-y-auto h-[calc(100vh-13.5rem)] max-h-[calc(100vh-13.5rem)] min-h-[18rem]">
             <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
@@ -516,15 +519,19 @@ export default function UserManagement() {
               <div>
                 <label className="block text-sm font-medium text-gray-700">Role</label>
                 <select
-                  value={formData.customRoleId}
+                  value={formData.role === "superadmin" ? "system-superadmin" : formData.customRoleId}
                   onChange={(e) => {
                     const id = e.target.value;
+                    if (id === "system-superadmin") {
+                      setFormData({ ...formData, role: "superadmin", customRoleId: "" });
+                      return;
+                    }
                     setFormData({ ...formData, role: "custom", customRoleId: id });
                   }}
                   className="mt-1 text-black p-2 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 >
-                  {customRoles.length > 0 ? (
-                    customRoles.map((role) => (
+                  {assignableRoles.length > 0 ? (
+                    assignableRoles.map((role) => (
                       <option key={role.id || role._id} value={role.id || role._id}>
                         {role.name}
                       </option>

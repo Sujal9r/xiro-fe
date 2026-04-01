@@ -6,6 +6,7 @@ import * as Yup from "yup";
 import { useRouter } from "next/navigation";
 import { PERMISSIONS, PermissionKey } from "../../lib/permissions";
 import SettingsDrawer from "../../components/SettingsDrawer";
+import XiroLogo from "../../components/XiroLogo";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://xiro-be.onrender.com';
 
@@ -83,9 +84,7 @@ export default function Login() {
             <div className="hidden lg:flex flex-col justify-between p-12">
               <div>
                 <div className="flex items-center gap-3 text-2xl font-semibold">
-                  <span className="h-10 w-10 rounded-2xl bg-white/90 text-gray-900 flex items-center justify-center">
-                    A
-                  </span>
+                  <XiroLogo size={42} className="h-10 w-10 rounded-2xl" />
                   Xiro
                 </div>
                 <p className="mt-3 text-white/70 text-sm">
