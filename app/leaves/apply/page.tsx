@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import LeavesNav from "../../../components/LeavesNav";
 import apiCall from "../../../lib/api";
+import { PermissionKey } from "../../../lib/permissions";
 import { useAlert } from "../../../components/AlertProvider";
 
 interface LeaveType {
@@ -19,6 +20,7 @@ interface MeProfile {
     longitude?: number | null;
     radius?: number | null;
   };
+  permissions?: PermissionKey[];
 }
 
 type LeaveUnit = "full_day" | "half_day" | "partial_day";
@@ -30,6 +32,7 @@ const LEAVE_UNIT_LABEL: Record<LeaveUnit, string> = {
 };
 
 const STANDARD_WORKDAY_MINUTES = 8 * 60;
+
 const buildMiniMapData = (
   coords?: { latitude: number; longitude: number } | null,
   radiusMeters = 100,
@@ -72,6 +75,7 @@ const hasWeekendInRange = (fromDate: string, toDate: string) => {
 
 export default function ApplyLeavePage() {
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [permissions, setPermissions] = useState<PermissionKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [capturingLocation, setCapturingLocation] = useState(false);
@@ -101,7 +105,7 @@ export default function ApplyLeavePage() {
   } | null>(null);
 
   useEffect(() => {
-    fetchPolicy();
+    void fetchPolicy();
   }, []);
 
   const fetchPolicy = async () => {
@@ -115,6 +119,7 @@ export default function ApplyLeavePage() {
         setFormData((prev) => ({ ...prev, typeKey: policy.leaveTypes[0].key }));
       }
       const profile = me as MeProfile;
+      setPermissions((profile.permissions || []) as PermissionKey[]);
       if (
         Number.isFinite(profile.wfhBaseLocation?.latitude) &&
         Number.isFinite(profile.wfhBaseLocation?.longitude)
@@ -127,7 +132,7 @@ export default function ApplyLeavePage() {
         setSavedWFHLocation(nextLocation);
         setWfhLocation(nextLocation);
       }
-    } catch (error) {
+    } catch {
     } finally {
       setLoading(false);
     }
@@ -143,9 +148,7 @@ export default function ApplyLeavePage() {
     end.setHours(0, 0, 0, 0);
     const diff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
     const days = diff + 1;
-    if (formData.leaveUnit === "half_day") {
-      return 0.5;
-    }
+    if (formData.leaveUnit === "half_day") return 0.5;
     if (formData.leaveUnit === "partial_day") {
       return Math.max(
         0,
@@ -173,7 +176,6 @@ export default function ApplyLeavePage() {
       ),
     [formData.fromDate, formData.toDate, formData.isMultiDay],
   );
-
   const isSingleDateUnit =
     formData.leaveUnit === "half_day" || formData.leaveUnit === "partial_day";
 
@@ -190,10 +192,7 @@ export default function ApplyLeavePage() {
   }, [selectedType?.allowHalfDay, formData.leaveUnit]);
 
   useEffect(() => {
-    if (!isWFHSelected) {
-      return;
-    }
-    if (!wfhLocation && savedWFHLocation) {
+    if (isWFHSelected && !wfhLocation && savedWFHLocation) {
       setWfhLocation(savedWFHLocation);
     }
   }, [isWFHSelected, savedWFHLocation, wfhLocation]);
@@ -258,6 +257,14 @@ export default function ApplyLeavePage() {
       showAlert("Please select leave type");
       return;
     }
+    if (!formData.fromDate) {
+      showAlert("Select a leave date");
+      return;
+    }
+    if (formData.isMultiDay && !formData.toDate) {
+      showAlert("Select end date");
+      return;
+    }
     if (hasWeekendSelection) {
       showAlert("Saturday and Sunday are off days. Please select weekdays only.");
       return;
@@ -266,6 +273,7 @@ export default function ApplyLeavePage() {
       showAlert("Capture your current home/work location before applying for Work From Home.");
       return;
     }
+
     setSubmitting(true);
     try {
       await apiCall("/api/leaves/apply", {
@@ -314,8 +322,8 @@ export default function ApplyLeavePage() {
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        <div className="flex h-64 items-center justify-center">
+          <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-500" />
         </div>
       </DashboardLayout>
     );
@@ -324,261 +332,406 @@ export default function ApplyLeavePage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-gray-900">Apply Leave</h1>
-        <LeavesNav currentPath="/leaves/apply" />
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow p-6 space-y-4">
-          {formData.leaveUnit !== "partial_day" ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Leave Type</label>
-              <select
-                value={formData.typeKey}
-                onChange={(e) => setFormData({ ...formData, typeKey: e.target.value })}
-                className="mt-1 w-full rounded-md border-gray-300 p-2 text-black"
+        <section
+          className="overflow-hidden rounded-[28px] border p-6 shadow-sm"
+          style={{
+            background:
+              "radial-gradient(circle at top right, color-mix(in srgb, var(--accent-500) 14%, transparent), transparent 30%), linear-gradient(135deg, color-mix(in srgb, var(--card) 96%, white), var(--card))",
+            borderColor: "var(--border)",
+          }}
+        >
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <div
+                className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em]"
+                style={{
+                  borderColor: "color-mix(in srgb, var(--accent-500) 22%, var(--border))",
+                  color: "var(--accent-700)",
+                  backgroundColor: "color-mix(in srgb, var(--accent-500) 10%, var(--card))",
+                }}
               >
-                {leaveTypes.map((type) => (
-                  <option key={type.key} value={type.key}>
-                    {type.name}
-                  </option>
-                ))}
-              </select>
+                Leave Workspace
+              </div>
+              <h1 className="mt-4 text-3xl font-semibold text-gray-900">Apply Leave</h1>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500">
+                Create leave requests with clean scheduling, unit-based controls, weekend checks,
+                and WFH geofence support when needed.
+              </p>
             </div>
-          ) : (
-            <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-700">
-              Partial Day is a separate free leave type. Leave type selection is not required.
+            <div
+              className="grid min-w-[240px] grid-cols-2 gap-3 rounded-[24px] border p-4"
+              style={{
+                borderColor: "var(--border)",
+                backgroundColor: "color-mix(in srgb, var(--foreground) 3%, var(--card))",
+              }}
+            >
+              <HeroStat label="Selected Unit" value={LEAVE_UNIT_LABEL[formData.leaveUnit]} />
+              <HeroStat label="Total" value={`${totalDays}`} />
             </div>
-          )}
-          {isWFHSelected && (
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-                <div>
-                  <div className="text-sm font-semibold text-blue-900">
+          </div>
+        </section>
+
+        <LeavesNav currentPath="/leaves/apply" permissions={permissions} />
+
+        <form
+          onSubmit={handleSubmit}
+          className="rounded-[28px] border p-6 shadow-sm"
+          style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
+        >
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+            <div className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                {formData.leaveUnit !== "partial_day" ? (
+                  <Field label="Leave Type">
+                    <select
+                      value={formData.typeKey}
+                      onChange={(e) => setFormData({ ...formData, typeKey: e.target.value })}
+                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                      style={fieldStyle}
+                    >
+                      {leaveTypes.map((type) => (
+                        <option key={type.key} value={type.key}>
+                          {type.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                ) : (
+                  <div
+                    className="rounded-2xl border px-4 py-3 text-sm md:col-span-2"
+                    style={{
+                      borderColor: "color-mix(in srgb, var(--accent-500) 22%, var(--border))",
+                      backgroundColor: "color-mix(in srgb, var(--accent-500) 8%, var(--card))",
+                      color: "var(--accent-700)",
+                    }}
+                  >
+                    Partial Day is a separate free leave type. Leave type selection is not required.
+                  </div>
+                )}
+
+                <Field label={formData.isMultiDay ? "From Date" : "Date"}>
+                  <input
+                    type="date"
+                    required
+                    value={formData.fromDate}
+                    onChange={(e) => setFormData({ ...formData, fromDate: e.target.value })}
+                    className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                    style={fieldStyle}
+                  />
+                </Field>
+
+                {formData.isMultiDay && (
+                  <Field label="To Date">
+                    <input
+                      type="date"
+                      required
+                      value={formData.toDate}
+                      onChange={(e) => setFormData({ ...formData, toDate: e.target.value })}
+                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                      style={fieldStyle}
+                    />
+                  </Field>
+                )}
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={formData.isMultiDay}
+                  disabled={isSingleDateUnit}
+                  onChange={(e) => setFormData({ ...formData, isMultiDay: e.target.checked })}
+                />
+                Apply for multiple days
+              </label>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Leave Unit</label>
+                <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  {(Object.keys(LEAVE_UNIT_LABEL) as LeaveUnit[]).map((unit) => (
+                    <label
+                      key={unit}
+                      className="flex items-center gap-2 rounded-2xl border p-3 text-sm"
+                      style={{
+                        borderColor:
+                          formData.leaveUnit === unit ? "var(--accent-500)" : "var(--border)",
+                        backgroundColor:
+                          formData.leaveUnit === unit
+                            ? "color-mix(in srgb, var(--accent-500) 10%, var(--card))"
+                            : "color-mix(in srgb, var(--foreground) 2%, var(--card))",
+                        opacity:
+                          unit === "half_day" && selectedType && !selectedType.allowHalfDay ? 0.5 : 1,
+                        cursor:
+                          unit === "half_day" && selectedType && !selectedType.allowHalfDay
+                            ? "not-allowed"
+                            : "pointer",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="leaveUnit"
+                        value={unit}
+                        checked={formData.leaveUnit === unit}
+                        disabled={unit === "half_day" && !!selectedType && !selectedType.allowHalfDay}
+                        onChange={() => setFormData({ ...formData, leaveUnit: unit })}
+                      />
+                      {LEAVE_UNIT_LABEL[unit]}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {formData.leaveUnit === "half_day" && (
+                <Field label="Half Day Session">
+                  <select
+                    value={formData.halfDaySession}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        halfDaySession: e.target.value as "first_half" | "second_half",
+                      })
+                    }
+                    className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                    style={fieldStyle}
+                  >
+                    <option value="first_half">1st Half (Day Start)</option>
+                    <option value="second_half">2nd Half (Day End)</option>
+                  </select>
+                </Field>
+              )}
+
+              {formData.leaveUnit === "partial_day" && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Field label="Partial Minutes">
+                    <input
+                      type="number"
+                      min={0}
+                      max={60}
+                      value={formData.partialMinutes}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          partialMinutes: Math.max(0, Math.min(60, Number(e.target.value || 0))),
+                        })
+                      }
+                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                      style={fieldStyle}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Allowed range: 0 to 60 minutes</p>
+                  </Field>
+
+                  <Field label="Partial Day Position">
+                    <select
+                      value={formData.partialDayPosition}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          partialDayPosition: e.target.value as "start" | "end",
+                        })
+                      }
+                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                      style={fieldStyle}
+                    >
+                      <option value="start">Shift Start</option>
+                      <option value="end">Shift End</option>
+                    </select>
+                  </Field>
+                </div>
+              )}
+
+              <Field label="Reason">
+                <textarea
+                  required
+                  value={formData.reason}
+                  onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                  style={fieldStyle}
+                  rows={5}
+                />
+              </Field>
+
+              <Field label="Attachment URL (optional)">
+                <input
+                  type="text"
+                  value={formData.attachmentUrl}
+                  onChange={(e) => setFormData({ ...formData, attachmentUrl: e.target.value })}
+                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                  style={fieldStyle}
+                />
+              </Field>
+
+              {hasWeekendSelection && (
+                <div className="rounded-2xl bg-orange-50 px-3 py-2 text-sm text-orange-700">
+                  Saturday and Sunday are weekly off. Leave cannot be applied on weekends.
+                </div>
+              )}
+            </div>
+
+            <aside className="space-y-4">
+              <div
+                className="rounded-[24px] border p-5"
+                style={{
+                  borderColor: "var(--border)",
+                  backgroundColor: "color-mix(in srgb, var(--foreground) 2%, var(--card))",
+                }}
+              >
+                <div className="text-sm font-semibold text-gray-900">Request Summary</div>
+                <div className="mt-4 space-y-3 text-sm">
+                  <SummaryRow label="Leave Type" value={selectedType?.name || "Partial Day"} />
+                  <SummaryRow label="Unit" value={LEAVE_UNIT_LABEL[formData.leaveUnit]} />
+                  <SummaryRow label="Duration" value={`${totalDays}`} />
+                  <SummaryRow
+                    label="Dates"
+                    value={
+                      formData.fromDate
+                        ? `${formData.fromDate}${formData.isMultiDay && formData.toDate ? ` to ${formData.toDate}` : ""}`
+                        : "Not selected"
+                    }
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={submitting || hasWeekendSelection}
+                  className="mt-5 w-full rounded-2xl py-3 text-sm font-semibold text-white disabled:opacity-60"
+                  style={{ backgroundColor: "var(--accent-600)" }}
+                >
+                  {submitting ? "Submitting..." : "Apply Leave"}
+                </button>
+              </div>
+
+              {isWFHSelected && (
+                <div
+                  className="rounded-[24px] border p-5"
+                  style={{
+                    borderColor: "color-mix(in srgb, var(--accent-500) 16%, var(--border))",
+                    backgroundColor: "color-mix(in srgb, var(--accent-500) 6%, var(--card))",
+                  }}
+                >
+                  <div className="text-sm font-semibold" style={{ color: "var(--accent-700)" }}>
                     Work From Home geofence
                   </div>
-                  <div className="mt-1 text-sm text-blue-700">
-                    Capture the employee's current location. After approval, dashboard attendance
+                  <div className="mt-1 text-sm text-gray-500">
+                    Capture the employee&apos;s current location. After approval, dashboard attendance
                     uses this point with a fixed 100 meter WFH geofence.
                   </div>
                   {wfhLocation && (
-                    <div className="mt-2 text-xs text-blue-800">
-                      Saved location: {wfhLocation.latitude.toFixed(6)},{" "}
-                      {wfhLocation.longitude.toFixed(6)} · Accuracy{" "}
-                      {Math.round(wfhLocation.accuracy)}m
+                    <div className="mt-2 text-xs text-gray-500">
+                      Saved location: {wfhLocation.latitude.toFixed(6)}, {wfhLocation.longitude.toFixed(6)} · Accuracy {Math.round(wfhLocation.accuracy)}m
                     </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={captureWFHLocation}
-                    disabled={capturingLocation}
-                    className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-60"
-                  >
-                    {capturingLocation ? "Capturing..." : wfhLocation ? "Refresh Location" : "Use Current Location"}
-                  </button>
-                  <div className="mt-4">
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={captureWFHLocation}
+                      disabled={capturingLocation}
+                      className="rounded-2xl px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                      style={{ backgroundColor: "var(--accent-600)" }}
+                    >
+                      {capturingLocation ? "Capturing..." : wfhLocation ? "Refresh Location" : "Use Current Location"}
+                    </button>
                     <button
                       type="button"
                       onClick={handleWFHClockInFromLeavePanel}
                       disabled={wfhClocking || !wfhLocation}
-                      className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-medium text-blue-700 disabled:opacity-50"
+                      className="rounded-2xl border px-4 py-2 text-sm font-medium disabled:opacity-50"
+                      style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
                     >
                       {wfhClocking ? "Syncing..." : "Clock In After Fetch"}
                     </button>
                   </div>
-                </div>
-                {wfhPreviewMap ? (
-                  <div className="overflow-hidden rounded-lg border border-blue-200 bg-white">
-                    <div className="relative h-64 w-full">
-                      <iframe
-                        title="WFH Geofence Map"
-                        src={wfhPreviewMap.src}
-                        className="h-full w-full"
-                        loading="lazy"
-                      />
-                      <div className="pointer-events-none absolute inset-0">
+                  <div className="mt-4">
+                    {wfhPreviewMap ? (
+                      <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border)" }}>
+                        <div className="relative h-64 w-full">
+                          <iframe
+                            title="WFH Geofence Map"
+                            src={wfhPreviewMap.src}
+                            className="h-full w-full"
+                            loading="lazy"
+                          />
+                          <div className="pointer-events-none absolute inset-0">
+                            <div
+                              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-blue-500/15"
+                              style={{
+                                left: `${wfhPreviewMap.point.left}%`,
+                                top: `${wfhPreviewMap.point.top}%`,
+                                width: `${wfhPreviewMap.diameterPercent}%`,
+                                height: `${wfhPreviewMap.diameterPercent}%`,
+                                borderColor: "color-mix(in srgb, var(--accent-500) 65%, white)",
+                              }}
+                            />
+                            <div
+                              className="absolute -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full ring-2 ring-white"
+                              style={{
+                                left: `${wfhPreviewMap.point.left}%`,
+                                top: `${wfhPreviewMap.point.top}%`,
+                                backgroundColor: "var(--accent-500)",
+                              }}
+                            />
+                          </div>
+                        </div>
                         <div
-                          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-500/70 bg-blue-500/15"
-                          style={{
-                            left: `${wfhPreviewMap.point.left}%`,
-                            top: `${wfhPreviewMap.point.top}%`,
-                            width: `${wfhPreviewMap.diameterPercent}%`,
-                            height: `${wfhPreviewMap.diameterPercent}%`,
-                          }}
-                        />
-                        <div
-                          className="absolute -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full bg-red-500 ring-2 ring-white"
-                          style={{
-                            left: `${wfhPreviewMap.point.left}%`,
-                            top: `${wfhPreviewMap.point.top}%`,
-                          }}
-                        />
+                          className="border-t px-3 py-2 text-xs text-gray-500"
+                          style={{ borderColor: "var(--border)" }}
+                        >
+                          Your live point is shown with the 100 meter WFH fence.
+                        </div>
                       </div>
-                    </div>
-                    <div className="border-t border-blue-100 px-3 py-2 text-xs text-blue-800">
-                      Your live point is shown with the 100 meter WFH fence.
-                    </div>
+                    ) : (
+                      <div
+                        className="flex h-48 items-center justify-center rounded-2xl border border-dashed px-4 text-center text-sm text-gray-500"
+                        style={{ borderColor: "var(--border)" }}
+                      >
+                        Fetch location to preview the WFH geofence map.
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-blue-200 bg-white/70 px-4 text-center text-sm text-blue-700">
-                    Fetch location to preview the WFH geofence map.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                {formData.isMultiDay ? "From Date" : "Date"}
-              </label>
-              <input
-                type="date"
-                required
-                value={formData.fromDate}
-                onChange={(e) => setFormData({ ...formData, fromDate: e.target.value })}
-                className="mt-1 w-full rounded-md border-gray-300 p-2 text-black"
-              />
-            </div>
-            {formData.isMultiDay && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">To Date</label>
-                <input
-                  type="date"
-                  required
-                  value={formData.toDate}
-                  onChange={(e) => setFormData({ ...formData, toDate: e.target.value })}
-                  className="mt-1 w-full rounded-md border-gray-300 p-2 text-black"
-                />
-              </div>
-            )}
+                </div>
+              )}
+            </aside>
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={formData.isMultiDay}
-              disabled={isSingleDateUnit}
-              onChange={(e) => setFormData({ ...formData, isMultiDay: e.target.checked })}
-            />
-            Apply for multiple days
-          </label>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Leave Unit</label>
-            <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
-              {(Object.keys(LEAVE_UNIT_LABEL) as LeaveUnit[]).map((unit) => (
-                <label
-                  key={unit}
-                  className={`flex items-center gap-2 rounded-md border p-2 text-sm ${
-                    formData.leaveUnit === unit ? "border-blue-500 bg-blue-50" : "border-gray-200"
-                  } ${
-                    unit === "half_day" && selectedType && !selectedType.allowHalfDay
-                      ? "opacity-50 cursor-not-allowed"
-                      : ""
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="leaveUnit"
-                    value={unit}
-                    checked={formData.leaveUnit === unit}
-                    disabled={unit === "half_day" && !!selectedType && !selectedType.allowHalfDay}
-                    onChange={() => setFormData({ ...formData, leaveUnit: unit })}
-                  />
-                  {LEAVE_UNIT_LABEL[unit]}
-                </label>
-              ))}
-            </div>
-          </div>
-          {formData.leaveUnit === "half_day" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Half Day Session</label>
-              <select
-                value={formData.halfDaySession}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    halfDaySession: e.target.value as "first_half" | "second_half",
-                  })
-                }
-                className="mt-1 w-full rounded-md border-gray-300 p-2 text-black"
-              >
-                <option value="first_half">1st Half (Day Start)</option>
-                <option value="second_half">2nd Half (Day End)</option>
-              </select>
-            </div>
-          )}
-          {formData.leaveUnit === "partial_day" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Partial Minutes</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={60}
-                  value={formData.partialMinutes}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      partialMinutes: Math.max(0, Math.min(60, Number(e.target.value || 0))),
-                    })
-                  }
-                  className="mt-1 w-full rounded-md border-gray-300 p-2 text-black"
-                />
-                <p className="mt-1 text-xs text-gray-500">Allowed range: 0 to 60 minutes</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Partial Day Position
-                </label>
-              <select
-                value={formData.partialDayPosition}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    partialDayPosition: e.target.value as "start" | "end",
-                  })
-                }
-                className="mt-1 w-full rounded-md border-gray-300 p-2 text-black"
-              >
-                <option value="start">Shift Start</option>
-                <option value="end">Shift End</option>
-              </select>
-            </div>
-          </div>
-          )}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Reason</label>
-            <textarea
-              required
-              value={formData.reason}
-              onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-              className="mt-1  w-full rounded-md border-gray-900 p-2 text-black"
-              rows={4}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Attachment URL (optional)
-            </label>
-            <input
-              type="text"
-              value={formData.attachmentUrl}
-              onChange={(e) => setFormData({ ...formData, attachmentUrl: e.target.value })}
-              className="mt-1 w-full rounded-md border-gray-300 p-2 text-black"
-            />
-          </div>
-          <div className="text-sm text-gray-600">Total Leave Units (Days): {totalDays}</div>
-          {hasWeekendSelection && (
-            <div className="rounded-md bg-orange-50 px-3 py-2 text-sm text-orange-700">
-              Saturday and Sunday are weekly off. Leave cannot be applied on weekends.
-            </div>
-          )}
-          <button
-            type="submit"
-            disabled={submitting || hasWeekendSelection}
-            className="w-full rounded-lg bg-blue-600 py-2 text-white hover:bg-blue-700 disabled:opacity-60"
-          >
-            {submitting ? "Submitting..." : "Apply Leave"}
-          </button>
         </form>
       </div>
     </DashboardLayout>
+  );
+}
+
+const fieldStyle = {
+  borderColor: "var(--border)",
+  backgroundColor: "color-mix(in srgb, var(--foreground) 3%, var(--card))",
+  color: "var(--foreground)",
+} as const;
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-medium text-gray-700">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function HeroStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+        {label}
+      </div>
+      <div className="mt-2 text-lg font-semibold text-gray-900">{value}</div>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-gray-500">{label}</span>
+      <span className="text-right font-medium text-gray-900">{value}</span>
+    </div>
   );
 }

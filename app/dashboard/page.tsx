@@ -252,6 +252,13 @@ const formatLateDuration = (lateMinutes: number) => {
   return `${hours}h ${minutes}m`;
 };
 
+const formatDurationShort = (minutes: number) => {
+  const safeMinutes = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(safeMinutes / 60);
+  const mins = safeMinutes % 60;
+  return `${hours}:${String(mins).padStart(2, "0")} hrs`;
+};
+
 const resolveArrivalStatus = (
   lateMinutes: number,
   hasPenalty: boolean,
@@ -657,10 +664,9 @@ export default function DashboardPage() {
     shiftEndMinutes - 30,
   );
   const lunchEndMinutes = Math.min(shiftEndMinutes, lunchStartMinutes + LUNCH_BREAK_MINUTES);
-  const lunchOffsetPercent =
-    ((lunchStartMinutes - shiftStartMinutes) / shiftDurationMinutes) * 100;
   const lunchWidthPercent =
     ((lunchEndMinutes - lunchStartMinutes) / shiftDurationMinutes) * 100;
+  const lunchMarkerWidthPercent = Math.min(14, Math.max(6, lunchWidthPercent * 0.7));
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
   const resolveOpenSession = () => {
@@ -1120,7 +1126,13 @@ export default function DashboardPage() {
   const leaveCreditByDate = useMemo(() => {
     const creditMap = new Map<
       string,
-      { fraction: number; placement: "start" | "end" | "both"; unit: "full_day" | "half_day" | "partial_day" }
+      {
+        fraction: number;
+        placement: "start" | "end" | "both";
+        unit: "full_day" | "half_day" | "partial_day";
+        typeKey?: string;
+        typeName?: string;
+      }
     >();
     for (const leave of approvedLeaves) {
       const leaveUnit = leave.leaveUnit || (leave.halfDay ? "half_day" : "full_day");
@@ -1161,6 +1173,8 @@ export default function DashboardPage() {
             fraction: dailyFraction,
             placement,
             unit: leaveUnit as "full_day" | "half_day" | "partial_day",
+            typeKey: leave.typeKey,
+            typeName: leave.typeName,
           });
         }
       }
@@ -1168,13 +1182,32 @@ export default function DashboardPage() {
     return creditMap;
   }, [approvedLeaves, shiftDurationMinutes]);
 
-  const rangedLogs = useMemo(() => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - range);
-    return [...attendance]
-      .filter((log) => new Date(log.checkIn) >= cutoff)
-      .sort((a, b) => new Date(b.checkIn).getTime() - new Date(a.checkIn).getTime());
-  }, [attendance, range]);
+  const dailyLogRows = useMemo(() => {
+    const sortedLogs = [...attendance].sort(
+      (a, b) => new Date(b.checkIn).getTime() - new Date(a.checkIn).getTime(),
+    );
+    const logMap = new Map<string, AttendanceLog>();
+
+    for (const log of sortedLogs) {
+      const key = toDateKey(new Date(log.checkIn));
+      if (!logMap.has(key)) {
+        logMap.set(key, log);
+      }
+    }
+
+    return Array.from({ length: range }).map((_, index) => {
+      const date = new Date();
+      date.setHours(0, 0, 0, 0);
+      date.setDate(date.getDate() - index);
+      const key = toDateKey(date);
+      return {
+        date,
+        dateKey: key,
+        log: logMap.get(key) || null,
+        leaveInfo: leaveCreditByDate.get(key),
+      };
+    });
+  }, [attendance, leaveCreditByDate, range]);
 
   const currentTime = now.toLocaleTimeString("en-US", {
     hour: "2-digit",
@@ -1324,17 +1357,25 @@ export default function DashboardPage() {
                   <div className="text-sm font-semibold text-gray-900">
                     {formatShiftTime(shiftStartTime)} - {formatShiftTime(shiftEndTime)}
                   </div>
-                  <div className="mt-3 relative h-2.5 w-full rounded-full overflow-hidden bg-gray-100">
+                  <div
+                    className="mt-3 relative h-4 w-full overflow-hidden rounded-full"
+                    style={{
+                      backgroundColor: "color-mix(in srgb, var(--accent-500) 32%, var(--card))",
+                    }}
+                  >
                     <div
                       className="absolute inset-y-0 left-0 rounded-full transition-all duration-700"
-                      style={{ width: `${timingProgressPercent}%`, backgroundColor: timingFillColor }}
+                      style={{
+                        width: `${timingProgressPercent}%`,
+                        backgroundColor: timingFillColor,
+                      }}
                     />
                     <div
-                      className="absolute inset-y-0 rounded-sm"
+                      className="absolute inset-y-[1px] rounded-full border border-white/60 shadow-sm"
                       style={{
-                        left: `${lunchOffsetPercent}%`,
-                        width: `${lunchWidthPercent}%`,
-                        backgroundColor: "color-mix(in srgb, var(--card) 78%, var(--accent-500))",
+                        left: `calc(50% - ${lunchMarkerWidthPercent / 2}%)`,
+                        width: `${lunchMarkerWidthPercent}%`,
+                        backgroundColor: "color-mix(in srgb, var(--card) 82%, var(--accent-500))",
                       }}
                     />
                   </div>
@@ -1464,11 +1505,6 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-                {rangedLogs.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">
-                    No entries logged yet.
-                  </p>
-                ) : (
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50 sticky top-0 z-10">
                       <tr>
@@ -1496,8 +1532,10 @@ export default function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {rangedLogs.map((log, index) => {
-                        const sessions = log.sessions || [];
+                      {dailyLogRows.map((row, index) => {
+                        const log = row.log;
+                        const leaveInfo = row.leaveInfo;
+                        const sessions = log?.sessions || [];
                         const computedDuration = sessions.length
                           ? sessions.reduce((sum, session) => {
                               if (session.duration) return sum + session.duration;
@@ -1529,53 +1567,87 @@ export default function DashboardPage() {
                               }
                               return sum;
                             }, 0)
-                          : log.duration || 0;
+                          : log?.duration || 0;
                         const durationMinutes = computedDuration;
-                        const firstCheckIn = sessions.length
-                          ? sessions[0].checkIn
-                          : log.checkIn;
-                        const leaveInfo = leaveCreditByDate.get(toDateKey(new Date(firstCheckIn)));
+                        const firstCheckIn = log
+                          ? sessions.length
+                            ? sessions[0].checkIn
+                            : log.checkIn
+                          : null;
                         const leaveCreditMinutes = Math.round(
                           (leaveInfo?.fraction || 0) * shiftDurationMinutes,
                         );
-                        const firstCheckInDate = new Date(firstCheckIn);
-                        const checkInMinutesOfDay =
-                          firstCheckInDate.getHours() * 60 + firstCheckInDate.getMinutes();
-                        const checkInOffsetPercent = Math.min(
+                        const firstCheckInDate = firstCheckIn ? new Date(firstCheckIn) : null;
+                        const checkInMinutesOfDay = firstCheckInDate
+                          ? firstCheckInDate.getHours() * 60 + firstCheckInDate.getMinutes()
+                          : null;
+                        const lastCheckOut = log
+                          ? sessions.length
+                            ? sessions[sessions.length - 1].checkOut
+                            : log.checkOut
+                          : null;
+                        const lastCheckOutDate = lastCheckOut ? new Date(lastCheckOut) : null;
+                        const checkoutMinutesOfDay = lastCheckOutDate
+                          ? lastCheckOutDate.getHours() * 60 + lastCheckOutDate.getMinutes()
+                          : firstCheckInDate
+                          ? Math.min(
+                              shiftEndMinutes + 180,
+                              firstCheckInDate.getHours() * 60 +
+                                firstCheckInDate.getMinutes() +
+                                durationMinutes,
+                            )
+                          : null;
+                        const timelinePadding = Math.max(90, Math.round(shiftDurationMinutes * 0.2));
+                        const timelineStartMinutes = shiftStartMinutes - timelinePadding;
+                        const timelineEndMinutes = shiftEndMinutes + timelinePadding;
+                        const timelineDuration = timelineEndMinutes - timelineStartMinutes;
+                        const shiftStartPercent =
+                          ((shiftStartMinutes - timelineStartMinutes) / timelineDuration) * 100;
+                        const shiftEndPercent =
+                          ((shiftEndMinutes - timelineStartMinutes) / timelineDuration) * 100;
+                        const clampPercent = (minutes: number) =>
+                          Math.min(
+                            100,
+                            Math.max(
+                              0,
+                              ((minutes - timelineStartMinutes) / timelineDuration) * 100,
+                            ),
+                          );
+                        const timelineStartPercent =
+                          checkInMinutesOfDay !== null ? clampPercent(checkInMinutesOfDay) : null;
+                        const timelineEndPercent =
+                          checkoutMinutesOfDay !== null ? clampPercent(checkoutMinutesOfDay) : null;
+                        const workedPercent =
+                          timelineStartPercent !== null && timelineEndPercent !== null
+                            ? Math.max(0, timelineEndPercent - timelineStartPercent)
+                            : 0;
+                        const leavePercent = Math.min(
                           100,
                           Math.max(
                             0,
-                            Math.round(
-                              ((checkInMinutesOfDay - shiftStartMinutes) / shiftDurationMinutes) * 100,
-                            ),
+                            ((leaveCreditMinutes || 0) / Math.max(1, timelineDuration)) * 100,
                           ),
                         );
-                        const workedRawPercent = Math.min(
-                          100,
-                          Math.max(0, Math.round((durationMinutes / shiftDurationMinutes) * 100)),
-                        );
-                        const workedPercent = Math.max(
-                          0,
-                          Math.min(100 - checkInOffsetPercent, workedRawPercent),
-                        );
-                        const workedEndPercent = Math.min(
-                          100,
-                          Math.max(0, checkInOffsetPercent + workedPercent),
-                        );
-                        const leavePercent = Math.min(
-                          100,
-                          Math.max(0, Math.round((leaveCreditMinutes / shiftDurationMinutes) * 100)),
-                        );
-                        const lastCheckOut = sessions.length
-                          ? sessions[sessions.length - 1].checkOut
-                          : log.checkOut;
-                        const checkInDate = new Date(firstCheckIn);
-                        const computedLateMinutes = Math.max(
-                          0,
-                          checkInDate.getHours() * 60 + checkInDate.getMinutes() - shiftStartMinutes,
-                        );
+                        const leaveStartPercent =
+                          leaveInfo?.placement === "end"
+                            ? shiftEndPercent - leavePercent
+                            : shiftStartPercent;
+                        const grossMinutes =
+                          firstCheckInDate && lastCheckOutDate
+                            ? Math.max(
+                                0,
+                                Math.floor(
+                                  (lastCheckOutDate.getTime() - firstCheckInDate.getTime()) / 60000,
+                                ),
+                              )
+                            : durationMinutes;
+                        const effectiveMinutes = durationMinutes + leaveCreditMinutes;
+                        const computedLateMinutes =
+                          checkInMinutesOfDay !== null
+                            ? Math.max(0, checkInMinutesOfDay - shiftStartMinutes)
+                            : 0;
                         const lateMinutes =
-                          typeof log.lateMinutes === "number"
+                          typeof log?.lateMinutes === "number"
                             ? Math.max(0, log.lateMinutes)
                             : computedLateMinutes;
                         const isHalfDayLeave = leaveInfo?.unit === "half_day";
@@ -1583,111 +1655,144 @@ export default function DashboardPage() {
                         const hasPenalty =
                           isHalfDayLeave || isFullDayLeave
                             ? false
-                            : typeof log.hasPenalty === "boolean"
+                            : typeof log?.hasPenalty === "boolean"
                             ? log.hasPenalty
                             : lateMinutes > PENALTY_LATE_MINUTES;
                         const arrivalStatus = isFullDayLeave
-                          ? { label: "On Leave", className: "bg-green-100 text-green-700" }
+                          ? { label: "On Leave", className: "bg-[color-mix(in_srgb,var(--accent-500)_14%,var(--card))] text-[var(--accent-700)]" }
                           : isHalfDayLeave
-                          ? { label: "Half Day Leave", className: "bg-blue-100 text-blue-700" }
-                          : resolveArrivalStatus(lateMinutes, hasPenalty, false);
-                        const rowDate = toDateKey(new Date(firstCheckIn));
-                        const rowMenuKey = log._id || `${rowDate}-${index}`;
+                          ? { label: "Half Day", className: "bg-[color-mix(in_srgb,var(--accent-500)_12%,var(--card))] text-[var(--accent-700)]" }
+                          : firstCheckIn
+                          ? resolveArrivalStatus(lateMinutes, hasPenalty, false)
+                          : { label: "No Entry", className: "bg-slate-100 text-slate-600" };
+                        const rowDate = row.dateKey;
+                        const rowMenuKey = log?._id || `${rowDate}-${index}`;
+                        const leaveTagLabel = leaveInfo?.typeKey?.toLowerCase().includes("wfh")
+                          ? "WFH"
+                          : leaveInfo?.typeName?.toLowerCase().includes("work from home")
+                          ? "WFH"
+                          : leaveInfo?.typeKey?.toLowerCase().includes("holiday") ||
+                            leaveInfo?.typeName?.toLowerCase().includes("holiday")
+                          ? "HLDY"
+                          : leaveInfo
+                          ? "LEAVE"
+                          : "";
+                        const leaveTagClass =
+                          leaveTagLabel === "WFH"
+                            ? "bg-[color-mix(in_srgb,var(--accent-500)_18%,var(--card))] text-[var(--accent-700)]"
+                            : leaveTagLabel === "HLDY"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-[color-mix(in_srgb,var(--accent-500)_22%,white)] text-[var(--accent-700)]";
+                        const isNoEntryRow = !log && !leaveInfo;
+                        const isCompactStatusRow = isFullDayLeave || isNoEntryRow;
+                        const compactRowStyle = isFullDayLeave
+                          ? {
+                              backgroundColor:
+                                "color-mix(in srgb, var(--accent-500) 12%, var(--card))",
+                              color: "var(--accent-700)",
+                              borderColor:
+                                "color-mix(in srgb, var(--accent-500) 20%, var(--border))",
+                            }
+                          : {
+                              backgroundColor:
+                                "color-mix(in srgb, var(--foreground) 6%, var(--card))",
+                              color: "var(--text-muted)",
+                              borderColor: "var(--border)",
+                            };
                         return (
-                          <tr key={index}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {formatDate(firstCheckIn)}
+                          <tr key={rowDate} className={isFullDayLeave ? "bg-[color-mix(in_srgb,var(--accent-500)_6%,var(--card))]" : ""}>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{formatDate(row.date.toISOString())}</span>
+                                {leaveTagLabel && (
+                                  <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] ${leaveTagClass}`}>
+                                    {leaveTagLabel}
+                                  </span>
+                                )}
+                              </div>
                             </td>
-                            <td className="px-6 py-4">
-                              <div className="relative w-56 h-8">
-                                <div className="absolute inset-x-0 top-0 h-5">
+                            {isCompactStatusRow ? (
+                              <td colSpan={6} className="px-4 py-3">
+                                <div
+                                  className="flex min-h-8 items-center justify-center rounded-xl border px-3 py-2 text-sm font-medium"
+                                  style={compactRowStyle}
+                                >
+                                  {isFullDayLeave ? leaveTagLabel || "Leave" : "No entries logged"}
+                                </div>
+                              </td>
+                            ) : (
+                              <>
+                            <td className="px-4 py-3">
+                              <div className="relative h-7 w-[18rem] max-w-full">
+                                <div className="absolute inset-x-0 top-0 h-4">
                                   {Array.from({ length: 21 }).map((_, tickIndex) => (
                                     <span
                                       key={tickIndex}
-                                      className="absolute top-0 h-5 w-px bg-gray-300/90"
+                                      className="absolute top-0 h-4 w-px bg-gray-300/70"
                                       style={{ left: `${(tickIndex / 20) * 100}%` }}
                                     />
                                   ))}
                                 </div>
-                                <div className="absolute inset-x-0 top-1.5 h-3 rounded-full bg-gray-200" />
-                                {leavePercent > 0 && leaveInfo?.placement === "both" && (
+                                <span
+                                  className="absolute top-4 -translate-x-1/2 h-0 w-0 border-l-[7px] border-r-[7px] border-b-[9px] border-l-transparent border-r-transparent border-b-gray-300"
+                                  style={{ left: `${shiftStartPercent}%` }}
+                                />
+                                <span
+                                  className="absolute top-4 -translate-x-1/2 h-0 w-0 border-l-[7px] border-r-[7px] border-b-[9px] border-l-transparent border-r-transparent border-b-gray-300"
+                                  style={{ left: `${shiftEndPercent}%` }}
+                                />
+                                {isFullDayLeave ? (
                                   <div
-                                    className="absolute top-1.5 h-3 rounded-full"
+                                    className="absolute top-1 h-2.5 rounded-full"
                                     style={{
                                       left: "0%",
                                       width: "100%",
-                                      backgroundColor: "color-mix(in srgb, var(--accent-500) 82%, black)",
+                                      backgroundColor: "color-mix(in srgb, var(--accent-500) 72%, var(--card))",
                                     }}
-                                    title="Approved full-day leave credit"
+                                    title="Full-day leave"
                                   />
-                                )}
-                                {leavePercent > 0 && leaveInfo?.placement === "start" && (
+                                ) : null}
+                                {leavePercent > 0 && !isFullDayLeave && (
                                   <div
-                                    className="absolute top-1.5 h-3 rounded-l-full"
+                                    className="absolute top-1 h-2.5 rounded-full"
                                     style={{
-                                      left: "0%",
+                                      left: `${leaveStartPercent}%`,
                                       width: `${leavePercent}%`,
-                                      backgroundColor: "color-mix(in srgb, var(--accent-500) 82%, black)",
+                                      backgroundColor: "color-mix(in srgb, var(--accent-500) 26%, var(--card))",
                                     }}
-                                    title="Approved leave credit (Shift Start)"
+                                    title="Approved leave"
                                   />
                                 )}
-                                {leavePercent > 0 && leaveInfo?.placement === "end" && (
+                                {workedPercent > 0 && timelineStartPercent !== null && (
                                   <div
-                                    className="absolute top-1.5 h-3 rounded-r-full"
+                                    className="absolute top-1 h-2.5 rounded-full"
                                     style={{
-                                      right: "0%",
-                                      width: `${leavePercent}%`,
-                                      backgroundColor: "color-mix(in srgb, var(--accent-500) 82%, black)",
-                                    }}
-                                    title="Approved leave credit (Shift End)"
-                                  />
-                                )}
-                                {workedPercent > 0 && (
-                                  <div
-                                    className="absolute top-1.5 h-3 rounded-full"
-                                    style={{
-                                      left: `${checkInOffsetPercent}%`,
+                                      left: `${timelineStartPercent}%`,
                                       width: `${workedPercent}%`,
                                       backgroundColor: lastCheckOut
-                                        ? "color-mix(in srgb, var(--accent-500) 38%, white)"
+                                        ? "color-mix(in srgb, var(--accent-500) 48%, white)"
                                         : "var(--accent-500)",
                                     }}
-                                    title="Worked time"
+                                    title="Logged time"
                                   />
-                                )}
-                                {workedPercent > 0 && (
-                                  <>
-                                    <span
-                                      className="absolute top-6 -translate-x-1/2 h-0 w-0 border-l-[9px] border-r-[9px] border-t-0 border-b-[11px] border-l-transparent border-r-transparent border-b-gray-300"
-                                      style={{ left: `${checkInOffsetPercent}%` }}
-                                    />
-                                    <span
-                                      className="absolute top-6 -translate-x-1/2 h-0 w-0 border-l-[9px] border-r-[9px] border-t-0 border-b-[11px] border-l-transparent border-r-transparent border-b-gray-300"
-                                      style={{ left: `${workedEndPercent}%` }}
-                                    />
-                                  </>
                                 )}
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {durationMinutes
-                                ? `${Math.floor(durationMinutes / 60)}h ${
-                                    durationMinutes % 60
-                                  }m`
-                                : "-"}
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                              <div className="font-medium text-gray-900">
+                                {effectiveMinutes > 0 ? formatDurationShort(effectiveMinutes) : "-"}
+                              </div>
                               {leaveCreditMinutes > 0 && (
-                                <div className="text-xs text-blue-600">
-                                  +{Math.floor(leaveCreditMinutes / 60)}h {leaveCreditMinutes % 60}m
-                                  {" "}leave credit
+                                <div className="text-xs" style={{ color: "var(--accent-600)" }}>
+                                  Includes {formatDurationShort(leaveCreditMinutes)} leave credit
                                 </div>
                               )}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {(shiftDurationMinutes / 60).toFixed(2)} hrs
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                              {grossMinutes > 0 ? formatDurationShort(grossMinutes) : "-"}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              {log.isRegularized ? (
+                            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                              {log?.isRegularized ? (
                                 <span
                                   title="Regularized"
                                   className="inline-flex items-center rounded-full bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-700"
@@ -1702,11 +1807,15 @@ export default function DashboardPage() {
                                 </span>
                               )}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {formatTime(firstCheckIn)} -
-                              {lastCheckOut ? ` ${formatTime(lastCheckOut)}` : " --"}
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                              {firstCheckIn ? (
+                                <>
+                                  {formatTime(firstCheckIn)} -
+                                  {lastCheckOut ? ` ${formatTime(lastCheckOut)}` : " --"}
+                                </>
+                              ) : null}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                               {canRegularize ? (
                                 <div className="relative inline-block" data-log-menu-root="true">
                                   <button
@@ -1730,7 +1839,7 @@ export default function DashboardPage() {
                                       });
                                       setActiveLogMenuContext({
                                         date: rowDate,
-                                        checkIn: toInputTime(firstCheckIn),
+                                        checkIn: toInputTime(firstCheckIn || undefined),
                                         checkOut: toInputTime(lastCheckOut || undefined),
                                       });
                                     }}
@@ -1743,12 +1852,13 @@ export default function DashboardPage() {
                                 <span className="text-xs text-gray-400">-</span>
                               )}
                             </td>
+                              </>
+                            )}
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
-                )}
               </div>
             </div>
 

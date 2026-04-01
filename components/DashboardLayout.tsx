@@ -13,6 +13,7 @@ import {
   HiOutlineClock,
   HiOutlineLocationMarker,
   HiOutlineUserCircle,
+  HiOutlineCube,
 } from "react-icons/hi";
 import { useRouter, usePathname } from "next/navigation";
 import { Dialog, Transition } from "@headlessui/react";
@@ -109,12 +110,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       icon: "users",
     },
     canManageShifts && {
-      label: "Shift Management",
+      label: "Shifts",
       path: "/admin/shifts",
       icon: "shifts",
     },
     canManageLocations && {
-      label: "Location Management",
+      label: "Locations",
       path: "/admin/locations",
       icon: "locations",
     },
@@ -141,7 +142,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       icon: "leave",
     },
     can(PERMISSIONS.VIEW_ADMIN_ROLES) && {
-      label: "Role Management",
+      label: "Roles & Access",
       path: "/admin/roles",
       icon: "roles",
     },
@@ -149,6 +150,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       label: "Finance",
       path: "/admin/finance",
       icon: "finance",
+    },
+    can(PERMISSIONS.ASSET_PANEL_VIEW) && {
+      label: "Assets",
+      path: "/admin/assets",
+      icon: "assets",
     },
     can(PERMISSIONS.VIEW_USER_TASKS) && {
       label: "My Tasks",
@@ -324,7 +330,8 @@ type IconKey =
   | "leave"
   | "settings"
   | "shifts"
-  | "locations";
+  | "locations"
+  | "assets";
 
 const ICONS: Record<IconKey, React.ReactNode> = {
   profile: <HiOutlineUserCircle className="h-5 w-5" />,
@@ -339,6 +346,7 @@ const ICONS: Record<IconKey, React.ReactNode> = {
   settings: <HiOutlineCog className="h-5 w-5" />,
   shifts: <HiOutlineClock className="h-5 w-5" />,
   locations: <HiOutlineLocationMarker className="h-5 w-5" />,
+  assets: <HiOutlineCube className="h-5 w-5" />,
 };
 
 function SidebarNavButton({
@@ -412,6 +420,7 @@ const PATH_PERMISSIONS: Record<string, PermissionKey[]> = {
   ],
   "/admin/roles": [PERMISSIONS.VIEW_ADMIN_ROLES],
   "/admin/finance": [PERMISSIONS.VIEW_ADMIN_FINANCE],
+  "/admin/assets": [PERMISSIONS.ASSET_PANEL_VIEW],
   "/hr/employees": [PERMISSIONS.VIEW_HR_EMPLOYEES],
   "/leaves/apply": [PERMISSIONS.LEAVE_APPLY],
   "/leaves/my": [PERMISSIONS.LEAVE_VIEW_MY],
@@ -446,6 +455,9 @@ const canAccessPath = (pathname: string, permissions: PermissionKey[]) => {
 const getDefaultPath = (permissions: PermissionKey[]) => {
   if (permissions.includes(PERMISSIONS.VIEW_DASHBOARD)) {
     return "/dashboard";
+  }
+  if (permissions.includes(PERMISSIONS.ASSET_PANEL_VIEW)) {
+    return "/admin/assets";
   }
   return "/profile";
 };

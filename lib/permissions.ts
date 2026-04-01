@@ -53,6 +53,14 @@ export const PERMISSIONS = {
   FINANCE_PAYROLL_VIEW_ANNUAL: "finance.payroll.view.annual",
   FINANCE_PAYROLL_EDIT: "finance.payroll.edit",
   FINANCE_PAYSLIP_GENERATE: "finance.payslip.generate",
+  ASSET_PANEL_VIEW: "asset.panel.view",
+  ASSET_VIEW_ALL: "asset.view.all",
+  ASSET_VIEW_SUMMARY: "asset.view.summary",
+  ASSET_CREATE: "asset.create",
+  ASSET_EDIT: "asset.edit",
+  ASSET_ASSIGN: "asset.assign",
+  ASSET_CONDITION_UPDATE: "asset.condition.update",
+  ASSET_DELETE: "asset.delete",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -112,6 +120,14 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   [PERMISSIONS.FINANCE_PAYROLL_VIEW_ANNUAL]: "Finance: View Annual Payroll",
   [PERMISSIONS.FINANCE_PAYROLL_EDIT]: "Finance: Edit Payroll",
   [PERMISSIONS.FINANCE_PAYSLIP_GENERATE]: "Finance: Generate Payslip",
+  [PERMISSIONS.ASSET_PANEL_VIEW]: "Assets: View Panel",
+  [PERMISSIONS.ASSET_VIEW_ALL]: "Assets: View All Inventory",
+  [PERMISSIONS.ASSET_VIEW_SUMMARY]: "Assets: View Summary Cards",
+  [PERMISSIONS.ASSET_CREATE]: "Assets: Add",
+  [PERMISSIONS.ASSET_EDIT]: "Assets: Edit",
+  [PERMISSIONS.ASSET_ASSIGN]: "Assets: Assign",
+  [PERMISSIONS.ASSET_CONDITION_UPDATE]: "Assets: Update Condition",
+  [PERMISSIONS.ASSET_DELETE]: "Assets: Delete",
 };
 
 export const PERMISSION_GROUPS: Array<{
@@ -219,5 +235,19 @@ export const PERMISSION_GROUPS: Array<{
     id: "tasks",
     title: "Tasks",
     permissions: [PERMISSIONS.VIEW_USER_TASKS],
+  },
+  {
+    id: "assets",
+    title: "Assets",
+    permissions: [
+      PERMISSIONS.ASSET_PANEL_VIEW,
+      PERMISSIONS.ASSET_VIEW_ALL,
+      PERMISSIONS.ASSET_VIEW_SUMMARY,
+      PERMISSIONS.ASSET_CREATE,
+      PERMISSIONS.ASSET_EDIT,
+      PERMISSIONS.ASSET_ASSIGN,
+      PERMISSIONS.ASSET_CONDITION_UPDATE,
+      PERMISSIONS.ASSET_DELETE,
+    ],
   },
 ];
