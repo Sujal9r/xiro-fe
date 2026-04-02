@@ -16,7 +16,7 @@ export default function Home() {
         <header className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3 text-2xl font-semibold">
             <span className="h-11 w-11 rounded-2xl bg-white text-gray-900 flex items-center justify-center">
-              <img src="/xiro.png" alt="Xiro logo" className="h-full w-full object-contain rounded-xl" />
+              A
             </span>
             Xiro
           </div>
@@ -61,6 +61,37 @@ export default function Home() {
               >
                 Create account
               </button>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-white/10 backdrop-blur-xl p-6 shadow-2xl">
+            <div className="grid gap-4">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs text-white/60">Today</p>
+                <div className="mt-2 flex items-center justify-between">
+                  <div>
+                    <p className="text-lg font-semibold">Attendance panel</p>
+                    <p className="text-sm text-white/60">24 present, 3 on leave</p>
+                  </div>
+                  <div className="h-12 w-12 rounded-full bg-blue-600/20 border border-blue-500/40" />
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs text-white/60">Pending approvals</p>
+                  <p className="mt-2 text-2xl font-semibold">8</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs text-white/60">Next leave</p>
+                  <p className="mt-2 text-2xl font-semibold">Apr 12</p>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs text-white/60">Role permissions</p>
+                <p className="mt-2 text-sm text-white/70">
+                  Control who can view attendance, manage leaves, and run reports.
+                </p>
+              </div>
             </div>
           </div>
         </section>
