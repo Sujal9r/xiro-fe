@@ -12,14 +12,17 @@ import {
 
 export default function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
-    applyTheme(getStoredTheme());
+    const mode = getStoredTheme();
+    applyTheme(mode);
     applyPalette(getStoredPalette());
     applyFont(getStoredFont());
 
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => applyTheme(getStoredTheme());
-    media.addEventListener("change", handler);
-    return () => media.removeEventListener("change", handler);
+    if (mode === "system") {
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      const handleChange = () => applyTheme("system");
+      mediaQuery.addEventListener("change", handleChange);
+      return () => mediaQuery.removeEventListener("change", handleChange);
+    }
   }, []);
 
   return <>{children}</>;

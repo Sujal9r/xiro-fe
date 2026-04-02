@@ -34,7 +34,7 @@ const FONT_KEY = "theme_font";
 export const getStoredTheme = (): ThemeMode => {
   if (typeof window === "undefined") return "light";
   const value = localStorage.getItem(THEME_KEY) as ThemeMode | null;
-  return value || "system";
+  return value && ["light", "dark", "system"].includes(value) ? value : "light";
 };
 
 export const getStoredPalette = (): PaletteKey => {
@@ -51,9 +51,13 @@ export const getStoredFont = (): FontKey => {
 
 export const applyTheme = (mode: ThemeMode) => {
   const root = document.documentElement;
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const shouldDark = mode === "dark" || (mode === "system" && prefersDark);
-  if (shouldDark) {
+  let actualMode: "light" | "dark";
+  if (mode === "system") {
+    actualMode = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  } else {
+    actualMode = mode;
+  }
+  if (actualMode === "dark") {
     root.classList.add("dark");
   } else {
     root.classList.remove("dark");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   FONTS,
   PALETTES,
@@ -19,20 +19,13 @@ import {
   HiOutlineAdjustments,
   HiOutlineMoon,
   HiOutlineSun,
-  HiOutlineDesktopComputer,
 } from "react-icons/hi";
 
 export default function SettingsDrawer() {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<ThemeMode>("system");
-  const [palette, setPaletteState] = useState<PaletteKey>("indigo");
-  const [font, setFontState] = useState<FontKey>("geist");
-
-  useEffect(() => {
-    setMode(getStoredTheme());
-    setPaletteState(getStoredPalette());
-    setFontState(getStoredFont());
-  }, []);
+  const [mode, setMode] = useState<ThemeMode>(() => getStoredTheme());
+  const [palette, setPaletteState] = useState<PaletteKey>(() => getStoredPalette());
+  const [font, setFontState] = useState<FontKey>(() => getStoredFont());
 
   const paletteOptions = useMemo(
     () => Object.entries(PALETTES) as Array<[PaletteKey, (typeof PALETTES)[PaletteKey]]>,
@@ -77,11 +70,10 @@ export default function SettingsDrawer() {
             <div className="p-5 space-y-6 overflow-y-auto">
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold text-gray-700">Color Mode</h4>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {([
                     { value: "light", label: "Light", icon: HiOutlineSun },
                     { value: "dark", label: "Dark", icon: HiOutlineMoon },
-                    { value: "system", label: "System", icon: HiOutlineDesktopComputer },
                   ] as Array<{ value: ThemeMode; label: string; icon: typeof HiOutlineSun }>).map(
                     (item) => (
                       <button

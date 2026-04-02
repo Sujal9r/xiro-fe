@@ -341,6 +341,7 @@ export default function DashboardPage() {
   const [wfhGeoCoords, setWfhGeoCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(
     null,
   );
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [regularizeModalOpen, setRegularizeModalOpen] = useState(false);
   const [regularizeLogsModalOpen, setRegularizeLogsModalOpen] = useState(false);
   const [regularizeDate, setRegularizeDate] = useState(toDateKey(new Date()));
@@ -405,6 +406,18 @@ export default function DashboardPage() {
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    const syncTheme = () => setIsDarkMode(root.classList.contains("dark"));
+    syncTheme();
+
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -1277,28 +1290,36 @@ export default function DashboardPage() {
           value: adminStats.totalUsers,
           note: "Total active records across your org.",
           icon: HiOutlineUserGroup,
-          accent: "from-sky-500/20 to-cyan-500/10 text-sky-700",
+          accent: isDarkMode
+            ? "from-sky-400/20 to-cyan-400/10 text-sky-200"
+            : "from-sky-200 to-cyan-100 text-sky-800",
         },
         {
           title: "Tickets created",
           value: adminStats.totalTickets,
           note: `${adminOpenTickets} still need movement or closure.`,
           icon: HiOutlineClipboardList,
-          accent: "from-violet-500/20 to-indigo-500/10 text-violet-700",
+          accent: isDarkMode
+            ? "from-violet-400/20 to-indigo-400/10 text-violet-200"
+            : "from-violet-200 to-indigo-100 text-violet-800",
         },
         {
           title: "Completion rate",
           value: `${adminResolutionRate}%`,
           note: `${adminStats.completedTickets} tickets closed successfully.`,
           icon: HiOutlineCheckCircle,
-          accent: "from-emerald-500/20 to-green-500/10 text-emerald-700",
+          accent: isDarkMode
+            ? "from-emerald-400/20 to-green-400/10 text-emerald-200"
+            : "from-emerald-200 to-green-100 text-emerald-800",
         },
         {
           title: "Needs attention",
           value: `${adminPendingRate}%`,
           note: `${adminStats.pendingTickets} tickets still waiting to start.`,
           icon: HiOutlineClock,
-          accent: "from-amber-500/20 to-orange-500/10 text-amber-700",
+          accent: isDarkMode
+            ? "from-amber-400/20 to-orange-400/10 text-amber-200"
+            : "from-amber-200 to-orange-100 text-amber-800",
         },
       ]
     : [];
@@ -1307,42 +1328,58 @@ export default function DashboardPage() {
         {
           label: "Active employees",
           value: adminStats.activeUsers,
-          tone: "bg-emerald-50 text-emerald-700 border-emerald-100",
+          tone: isDarkMode
+            ? "bg-black text-emerald-200 border-emerald-400/15"
+            : "bg-emerald-50 text-emerald-800 border-emerald-200",
         },
         {
           label: "Disabled accounts",
           value: adminStats.disabledUsers,
-          tone: "bg-rose-50 text-rose-700 border-rose-100",
+          tone: isDarkMode
+            ? "bg-black text-rose-200 border-rose-400/15"
+            : "bg-rose-50 text-rose-800 border-rose-200",
         },
         {
           label: "Checked in today",
           value: adminStats.checkedInUsersToday,
-          tone: "bg-sky-50 text-sky-700 border-sky-100",
+          tone: isDarkMode
+            ? "bg-black text-sky-200 border-sky-400/15"
+            : "bg-sky-50 text-sky-800 border-sky-200",
         },
         {
           label: "On leave today",
           value: adminStats.onLeaveToday,
-          tone: "bg-violet-50 text-violet-700 border-violet-100",
+          tone: isDarkMode
+            ? "bg-black text-violet-200 border-violet-400/15"
+            : "bg-violet-50 text-violet-800 border-violet-200",
         },
         {
           label: "Pending leave requests",
           value: adminStats.pendingLeaveRequests,
-          tone: "bg-amber-50 text-amber-700 border-amber-100",
+          tone: isDarkMode
+            ? "bg-black text-amber-200 border-amber-400/15"
+            : "bg-amber-50 text-amber-800 border-amber-200",
         },
         {
           label: "Pending regularizations",
           value: adminStats.pendingRegularizations,
-          tone: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100",
+          tone: isDarkMode
+            ? "bg-black text-fuchsia-200 border-fuchsia-400/15"
+            : "bg-fuchsia-50 text-fuchsia-800 border-fuchsia-200",
         },
         {
           label: "Assets tracked",
           value: adminStats.totalAssets,
-          tone: "bg-slate-100 text-slate-700 border-slate-200",
+          tone: isDarkMode
+            ? "bg-black text-slate-200 border-white/10"
+            : "bg-gray-50 text-gray-800 border-gray-200",
         },
         {
           label: "Assets in maintenance",
           value: adminStats.maintenanceAssets,
-          tone: "bg-orange-50 text-orange-700 border-orange-100",
+          tone: isDarkMode
+            ? "bg-black text-orange-200 border-orange-400/15"
+            : "bg-orange-50 text-orange-800 border-orange-200",
         },
       ]
     : [];
@@ -2084,156 +2121,153 @@ export default function DashboardPage() {
         )}
         {data.admin && canViewAdminOverview && (
           <section className="space-y-6">
-            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,#f8fbff_0%,#ffffff_52%,#f5f7fb_100%)] shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
-              <div className="grid gap-6 border-b border-slate-200 px-6 py-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8">
+            <div className={`overflow-hidden rounded-[28px] border shadow-[0_18px_50px_rgba(15,23,42,0.08)] ${isDarkMode ? "border-white/10 bg-black shadow-[0_18px_50px_rgba(0,0,0,0.55)]" : "border-gray-300 bg-gray-50"}`}>
+              <div className={`grid gap-6 border-b px-6 py-6 lg:grid-cols-[1.2fr_0.8fr] lg:px-8 ${isDarkMode ? "border-white/10" : "border-gray-200"}`}>
                 <div className="space-y-4">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">
+                  <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] ${isDarkMode ? "border-white/10 bg-black text-gray-300" : "border-gray-300 bg-white text-gray-800"}`}>
                     <HiOutlineChartBar className="h-4 w-4" />
                     Admin overview
                   </div>
                   <div>
-                    <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+                    <h2 className={`text-2xl font-semibold tracking-tight ${isDarkMode ? "text-white" : "text-gray-900"}`}>
                       Clearer control over team activity and ticket flow
                     </h2>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                    <p className={`mt-2 max-w-2xl text-sm leading-6 ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>
                       A simple snapshot of users, workload, and completion so the dashboard feels
                       full without becoming noisy.
                     </p>
                   </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-                  <div className="rounded-2xl border border-slate-200 bg-white/90 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  <div className={`rounded-2xl border p-4 shadow-sm ${isDarkMode ? "border-white/10 bg-black" : "border-gray-300 bg-white"}`}>
+                    <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${isDarkMode ? "text-gray-500" : "text-gray-700"}`}>
                       Active workload
                     </p>
-                    <p className="mt-2 text-3xl font-semibold text-slate-900">{adminOpenTickets}</p>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className={`mt-2 text-3xl font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>{adminOpenTickets}</p>
+                    <p className={`mt-1 text-sm ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>
                       Pending + in progress tickets
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white/90 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  <div className={`rounded-2xl border p-4 shadow-sm ${isDarkMode ? "border-white/10 bg-black" : "border-gray-300 bg-white"}`}>
+                    <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${isDarkMode ? "text-gray-500" : "text-gray-700"}`}>
                       Ticket health
                     </p>
-                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                    <div className={`mt-3 h-2 overflow-hidden rounded-full ${isDarkMode ? "bg-white/10" : "bg-gray-200"}`}>
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-sky-500 to-amber-400"
                         style={{ width: `${Math.max(8, adminResolutionRate)}%` }}
                       />
                     </div>
-                    <p className="mt-2 text-sm text-slate-600">
+                    <p className={`mt-2 text-sm ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>
                       {adminResolutionRate}% of tickets completed
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="grid gap-4 px-6 py-6 md:grid-cols-2 xl:grid-cols-4 lg:px-8">
+              <div className={`grid gap-4 px-6 py-6 md:grid-cols-2 xl:grid-cols-4 lg:px-8 ${isDarkMode ? "bg-black" : "bg-gray-50"}`}>
                 {adminKpis.map((item) => {
                   const Icon = item.icon;
                   return (
                     <div
                       key={item.title}
-                      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                      className={`rounded-2xl border p-5 shadow-md ${isDarkMode ? "border-white/10 bg-black" : "border-gray-300 bg-white"}`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <p className="text-sm font-medium text-slate-500">{item.title}</p>
-                          <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
+                          <p className={`text-sm font-medium ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>{item.title}</p>
+                          <p className={`mt-2 text-3xl font-semibold tracking-tight ${isDarkMode ? "text-white" : "text-gray-900"}`}>
                             {item.value}
                           </p>
                         </div>
                         <div
-                          className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${item.accent}`}
+                          className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${item.accent} ${isDarkMode ? "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]" : ""}`}
                         >
                           <Icon className="h-5 w-5" />
                         </div>
                       </div>
-                      <p className="mt-3 text-sm leading-6 text-slate-500">{item.note}</p>
+                      <p className={`mt-3 text-sm leading-6 ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>{item.note}</p>
                     </div>
                   );
                 })}
               </div>
 
-              <div className="grid gap-4 border-t border-slate-200 bg-slate-50/70 px-6 py-5 md:grid-cols-3 lg:px-8">
-                <div className="rounded-2xl border border-white bg-white/90 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              <div className={`grid gap-4 border-t px-6 py-5 md:grid-cols-3 lg:px-8 ${isDarkMode ? "border-white/10 bg-black" : "border-gray-200 bg-gray-50"}`}>
+                <div className={`rounded-2xl border p-4 shadow-sm ${isDarkMode ? "border-white/10 bg-black" : "border-gray-300 bg-white"}`}>
+                  <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDarkMode ? "text-gray-500" : "text-gray-700"}`}>
                     Pending
                   </p>
                   <div className="mt-2 flex items-end justify-between gap-3">
                     <span className="text-2xl font-semibold text-amber-600">
                       {data.admin.stats.pendingTickets}
                     </span>
-                    <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                    <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">
                       Waiting to start
                     </span>
                   </div>
                 </div>
-                <div className="rounded-2xl border border-white bg-white/90 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <div className={`rounded-2xl border p-4 shadow-sm ${isDarkMode ? "border-white/10 bg-black" : "border-gray-300 bg-white"}`}>
+                  <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDarkMode ? "text-gray-500" : "text-gray-700"}`}>
                     In progress
                   </p>
                   <div className="mt-2 flex items-end justify-between gap-3">
                     <span className="text-2xl font-semibold text-sky-600">
                       {data.admin.stats.startedTickets}
                     </span>
-                    <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
+                    <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 dark:bg-sky-400/10 dark:text-sky-200">
                       Being worked on
                     </span>
                   </div>
                 </div>
-                <div className="rounded-2xl border border-white bg-white/90 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                <div className={`rounded-2xl border p-4 shadow-sm ${isDarkMode ? "border-white/10 bg-black" : "border-gray-300 bg-white"}`}>
+                  <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDarkMode ? "text-gray-500" : "text-gray-700"}`}>
                     Completed
                   </p>
                   <div className="mt-2 flex items-end justify-between gap-3">
                     <span className="text-2xl font-semibold text-emerald-600">
                       {data.admin.stats.completedTickets}
                     </span>
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">
                       Successfully closed
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="border-t border-slate-200 px-6 py-6 lg:px-8">
+              <div className={`border-t px-6 py-6 lg:px-8 ${isDarkMode ? "border-white/10" : "border-gray-200"}`}>
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-base font-semibold text-slate-900">Operations Snapshot</h3>
-                    <p className="text-sm text-slate-500">
+                    <h3 className={`text-base font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>Operations Snapshot</h3>
+                    <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>
                       More than tickets, this tracks people, attendance, leave, and assets too.
                     </p>
                   </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   {adminOps.map((item) => (
-                    <div
-                      key={item.label}
-                      className={`rounded-2xl border p-4 ${item.tone}`}
-                    >
+                    <div key={item.label} className={`rounded-2xl border p-4 shadow-md ${isDarkMode ? "shadow-none" : ""} ${item.tone}`}>
                       <p className="text-sm font-medium">{item.label}</p>
                       <p className="mt-2 text-3xl font-semibold tracking-tight">{item.value}</p>
                     </div>
                   ))}
                 </div>
                 <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  <div className={`rounded-2xl border p-4 shadow-sm ${isDarkMode ? "border-white/10 bg-black" : "border-gray-300 bg-white"}`}>
+                    <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDarkMode ? "text-gray-500" : "text-gray-700"}`}>
                       Asset usage
                     </p>
-                    <p className="mt-2 text-2xl font-semibold text-slate-900">
+                    <p className={`mt-2 text-2xl font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
                       {adminStats?.assignedAssets || 0}
                     </p>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className={`mt-1 text-sm ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>
                       Assets currently assigned to people or external holders.
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  <div className={`rounded-2xl border p-4 shadow-sm ${isDarkMode ? "border-white/10 bg-black" : "border-gray-300 bg-white"}`}>
+                    <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDarkMode ? "text-gray-500" : "text-gray-700"}`}>
                       Attendance coverage
                     </p>
-                    <p className="mt-2 text-2xl font-semibold text-slate-900">
+                    <p className={`mt-2 text-2xl font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
                       {adminStats?.activeUsers
                         ? Math.round(
                             ((adminStats.checkedInUsersToday || 0) / adminStats.activeUsers) * 100,
@@ -2241,19 +2275,19 @@ export default function DashboardPage() {
                         : 0}
                       %
                     </p>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className={`mt-1 text-sm ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>
                       Active employees who have a check-in recorded today.
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  <div className={`rounded-2xl border p-4 shadow-sm ${isDarkMode ? "border-white/10 bg-black" : "border-gray-300 bg-white"}`}>
+                    <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isDarkMode ? "text-gray-500" : "text-gray-700"}`}>
                       Review queue
                     </p>
-                    <p className="mt-2 text-2xl font-semibold text-slate-900">
+                    <p className={`mt-2 text-2xl font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
                       {(adminStats?.pendingLeaveRequests || 0) +
                         (adminStats?.pendingRegularizations || 0)}
                     </p>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className={`mt-1 text-sm ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>
                       Combined approvals waiting in leave and regularization workflows.
                     </p>
                   </div>
@@ -2261,15 +2295,15 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_12px_35px_rgba(15,23,42,0.06)]">
-              <div className="flex flex-col gap-2 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className={`overflow-hidden rounded-[24px] border bg-white shadow-[0_12px_35px_rgba(15,23,42,0.06)] ${isDarkMode ? "border-white/10 bg-black shadow-[0_12px_35px_rgba(0,0,0,0.5)]" : "border-gray-300"}`}>
+              <div className={`flex flex-col gap-2 border-b px-6 py-5 sm:flex-row sm:items-center sm:justify-between ${isDarkMode ? "border-white/10 bg-black" : "border-gray-200 bg-gray-50"}`}>
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-900">Recent Tickets</h3>
-                  <p className="text-sm text-slate-500">
+                  <h3 className={`text-lg font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>Recent Tickets</h3>
+                  <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>
                     Latest ticket movement across the workspace.
                   </p>
                 </div>
-                <div className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${isDarkMode ? "border-white/10 bg-black text-gray-300" : "border-gray-200 bg-gray-50 text-gray-700"}`}>
                   {data.admin.recentTickets.length} recent items
                 </div>
               </div>
@@ -2278,30 +2312,30 @@ export default function DashboardPage() {
                   <p className="text-gray-500 text-center py-8">No tickets yet.</p>
                 ) : (
                   <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-                    <table className="min-w-full divide-y divide-slate-200">
-                      <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
+                    <table className={`min-w-full divide-y ${isDarkMode ? "divide-white/10" : "divide-gray-200"}`}>
+                      <thead className={`sticky top-0 z-10 backdrop-blur ${isDarkMode ? "bg-black" : "bg-white"}`}>
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                          <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-[0.18em] ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>
                             Title
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                          <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-[0.18em] ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>
                             Assigned To
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                          <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-[0.18em] ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>
                             Status
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                          <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-[0.18em] ${isDarkMode ? "text-gray-400" : "text-gray-700"}`}>
                             Created
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 bg-white">
+                      <tbody className={`divide-y ${isDarkMode ? "divide-white/10 bg-black" : "divide-gray-200 bg-white"}`}>
                         {data.admin.recentTickets.map((ticket) => (
-                          <tr key={ticket._id} className="hover:bg-slate-50/70">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
+                          <tr key={ticket._id} className={isDarkMode ? "hover:bg-black" : "hover:bg-gray-50"}>
+                            <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isDarkMode ? "text-white" : "text-gray-900"}`}>
                               {ticket.title}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">
+                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
                               {ticket.assignedTo?.name || "Unassigned"}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
@@ -2313,7 +2347,7 @@ export default function DashboardPage() {
                                 {ticket.status}
                               </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
                               {new Date(ticket.createdAt).toLocaleDateString()}
                             </td>
                           </tr>
@@ -2332,7 +2366,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white p-6 rounded-lg shadow">
                 <div className="text-sm text-gray-600">Total Employees</div>
-                <div className="text-2xl font-bold text-black">
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   {data.hr.stats.totalEmployees}
                 </div>
               </div>
@@ -2351,7 +2385,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg text-black font-semibold mb-4">
+              <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
                 Employee Status Overview
               </h3>
               <ResponsiveContainer width="100%" height={250}>
@@ -2367,7 +2401,7 @@ export default function DashboardPage() {
 
             <div className="bg-white rounded-lg shadow">
               <div className="p-6 border-b border-gray-200">
-                <h3 className="text-lg text-black font-semibold">Attendance</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Attendance</h3>
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6">
                 <div className="lg:col-span-1 bg-gray-50 rounded-lg border border-gray-200">
@@ -2533,7 +2567,7 @@ export default function DashboardPage() {
             {canReviewRegularization && (
               <div className="bg-white rounded-lg shadow">
                 <div className="p-6 border-b border-gray-200">
-                  <h3 className="text-lg text-black font-semibold">Regularization Requests</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Regularization Requests</h3>
                 </div>
                 <div className="p-6">
                   {hrRegularizationRequests.length === 0 ? (
@@ -2889,7 +2923,7 @@ export default function DashboardPage() {
                 type="date"
                 value={wfhFormDate}
                 onChange={(e) => setWfhFormDate(e.target.value)}
-                className="mt-1 w-full rounded-md border border-gray-300 p-2 text-black"
+                className="mt-1 w-full rounded-md border border-gray-300 bg-white p-2 text-gray-900 dark:border-white/10 dark:bg-black dark:text-white"
               />
             </div>
             <div>
@@ -2898,7 +2932,7 @@ export default function DashboardPage() {
                 rows={5}
                 value={wfhFormReason}
                 onChange={(e) => setWfhFormReason(e.target.value)}
-                className="mt-1 w-full rounded-md border border-gray-300 p-2 text-black"
+                className="mt-1 w-full rounded-md border border-gray-300 bg-white p-2 text-gray-900 dark:border-white/10 dark:bg-black dark:text-white"
               />
             </div>
             <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
