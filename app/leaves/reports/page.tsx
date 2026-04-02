@@ -9,7 +9,7 @@ import { useAlert } from "../../../components/AlertProvider";
 
 interface ReportItem {
   _id: string;
-  employee?: { name: string; email: string };
+  employee?: { name: string; email: string }; 
   typeName: string;
   fromDate: string;
   toDate: string;
